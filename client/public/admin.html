@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Admin Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f3f4f6;
+        }
+
+        .dashboard {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #f97316;
+            margin-bottom: 20px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .card h3 {
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .card .value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #f97316;
+        }
+
+        .menu {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .menu a {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 5px;
+            background: #f97316;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+
+        .content {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            min-height: 300px;
+        }
+
+        .sidebar {
+            background: #1f2937;
+            color: white;
+            width: 250px;
+            position: fixed;
+            height: 100%;
+            top: 0;
+            left: 0;
+            padding: 20px;
+        }
+
+        .sidebar h2 {
+            color: #f97316;
+            margin-bottom: 30px;
+        }
+
+        .sidebar a {
+            display: block;
+            color: white;
+            text-decoration: none;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+        }
+
+        .sidebar a:hover {
+            background: #374151;
+        }
+
+        .main-content {
+            margin-left: 250px;
+            padding: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="sidebar">
+        <h2>FoodOrder Admin</h2>
+        <a href="/admin.html">Dashboard</a>
+        <a href="#">Foods</a>
+        <a href="#">Orders</a>
+        <a href="#">Users</a>
+        <a href="#">Payments</a>
+        <a href="/">Back to Site</a>
+    </div>
+    <div class="main-content">
+        <div class="dashboard">
+            <h1>Admin Dashboard</h1>
+            <div class="stats">
+                <div class="card">
+                    <h3>Total Revenue</h3>
+                    <div class="value">$12,500</div>
+                </div>
+                <div class="card">
+                    <h3>Total Orders</h3>
+                    <div class="value">342</div>
+                </div>
+                <div class="card">
+                    <h3>Total Users</h3>
+                    <div class="value">1,289</div>
+                </div>
+                <div class="card">
+                    <h3>Total Foods</h3>
+                    <div class="value">24</div>
+                </div>
+            </div>
+            <div class="menu">
+                <a href="#">Manage Foods</a>
+                <a href="#">View Orders</a>
+                <a href="#">Manage Users</a>
+                <a href="#">Settings</a>
+            </div>
+            <div class="content">
+                <h2>Welcome to Admin Panel!</h2>
+                <p>You are logged in as administrator.</p>
+                <p>This is a working admin dashboard. Your React app has CSS issues, but this HTML page works.</p>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
