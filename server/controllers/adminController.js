@@ -5,9 +5,7 @@ const Payment = require('../models/Payment')
 const Review = require('../models/Review')
 const asyncHandler = require('express-async-handler')
 
-// @desc    Get dashboard stats
-// @route   GET /api/admin/stats
-// @access  Private/Admin
+
 const getDashboardStats = asyncHandler(async (req, res) => {
   const totalUsers = await User.countDocuments()
   const totalOrders = await Order.countDocuments()
@@ -42,9 +40,7 @@ const getDashboardStats = asyncHandler(async (req, res) => {
   })
 })
 
-// @desc    Get revenue chart data
-// @route   GET /api/admin/charts/revenue
-// @access  Private/Admin
+
 const getRevenueChart = asyncHandler(async (req, res) => {
   const { days = 30 } = req.query
   

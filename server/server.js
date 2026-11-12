@@ -30,6 +30,9 @@ const adminRoutes = require('./routes/adminRoutes')
 const { errorMiddleware } = require('./middleware/errorMiddleware')
 const { notFoundMiddleware } = require('./middleware/notFoundMiddleware')
 
+
+
+
 // Initialize express app
 const app = express()
 
@@ -46,6 +49,7 @@ app.use(cors({
   credentials: true,
   optionsSuccessStatus: 200,
 }))
+
 
 // Rate limiting
 const limiter = rateLimit({
@@ -197,11 +201,7 @@ const startServer = async () => {
   }
 }
 
-// Handle uncaught exceptions
-// process.on('uncaughtException', (error) => {
-//   console.error('Uncaught Exception:', error)
-//   process.exit(1)
-// })
+
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason)
 })
