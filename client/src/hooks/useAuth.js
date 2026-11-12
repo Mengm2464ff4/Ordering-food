@@ -2,6 +2,7 @@ import { useContext, useCallback } from 'react'
 import { AuthContext } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import { useState } from 'react'
 
 export const useAuth = () => {
   const context = useContext(AuthContext)
