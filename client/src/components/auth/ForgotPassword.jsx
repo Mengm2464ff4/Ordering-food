@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FiMail, FiSend, FiArrowLeft } from 'react-icons/fi'
+import axios from 'axios' // ✅ បន្ថែម Import នេះ
 import Button from '../common/Button'
 import Input from '../common/Input'
 import toast from 'react-hot-toast'
@@ -18,12 +19,23 @@ const ForgotPassword = () => {
     }
 
     setIsLoading(true)
-    // Simulate API call
-    setTimeout(() => {
+
+    try {
+      // ✅ ហៅ API ពិតប្រាកដទៅកាន់ Backend
+      const response = await axios.post('/api/auth/forgot-password', { email })
+
+      if (response.data.success) {
+        setIsSubmitted(true)
+        toast.success('Reset link sent to your email')
+      } else {
+        toast.error(response.data.message || 'Failed to send reset link')
+      }
+    } catch (error) {
+      const message = error.response?.data?.message || 'Something went wrong'
+      toast.error(message)
+    } finally {
       setIsLoading(false)
-      setIsSubmitted(true)
-      toast.success('Reset link sent to your email')
-    }, 1500)
+    }
   }
 
   if (isSubmitted) {
