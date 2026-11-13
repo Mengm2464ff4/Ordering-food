@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { useAuth } from '../../context/AuthContext' 
+import { useAuth } from '../hooks/useAuth'
 import { FiUser, FiMail, FiPhone, FiMapPin, FiLock, FiSave } from 'react-icons/fi'
-import Button from '../../components/common/Button'
-import Input from '../../components/common/Input'
+import Button from '../components/common/Button'
+import Input from '../components/common/Input'
 import toast from 'react-hot-toast'
 
 const Profile = () => {
