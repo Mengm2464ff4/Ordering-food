@@ -33,15 +33,19 @@ const { notFoundMiddleware } = require('./middleware/notFoundMiddleware')
 // Initialize express app
 const app = express()
 
-// ✅ បន្ថែមបន្ទាត់នេះ ដើម្បីដោះស្រាយ X-Forwarded-For
+// បន្ថែមបន្ទាត់នេះ ដើម្បីដោះស្រាយ X-Forwarded-For
 app.set('trust proxy', 1)
 
 // ====================
 // Security Middleware
 // ====================
 
-// Set security headers
-app.use(helmet())
+// ប្តូរពី app.use(helmet()) ទៅជា៖
+app.use(
+  helmet({
+    crossOriginResourcePolicy: false,
+  })
+);
 
 // Enable CORS
 app.use(cors({
@@ -85,7 +89,14 @@ app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
 // Serve static files from uploads directory
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
+app.use(
+  '/uploads',
+  (req, res, next) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'); // ✅ អនុញ្ញាតឱ្យទាញយករូបភាព
+    next();
+  },
+  express.static(path.join(__dirname, 'uploads'))
+);
 
 // ====================
 // Health Check Route
