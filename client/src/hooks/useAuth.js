@@ -11,7 +11,7 @@ export const useAuth = () => {
     throw new Error('useAuth must be used within an AuthProvider')
   }
 
-  const { user, login, register, logout, updateProfile, isAdmin, isAuthenticated, loading, error } = context
+  const { user, login, register, logout, updateProfile, changePassword, isAdmin, isAuthenticated, loading, error } = context
   const navigate = useNavigate()
 
   // Login with redirect
@@ -84,7 +84,8 @@ export const useAuth = () => {
     register,
     logout,
     updateProfile,
-    
+    changePassword,
+
     // Extended methods
     loginWithRedirect,
     registerWithRedirect,
@@ -95,5 +96,6 @@ export const useAuth = () => {
     getUserEmail,
     getUserInitials,
     hasPermission,
+
   }
 }

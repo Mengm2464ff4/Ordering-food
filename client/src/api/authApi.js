@@ -25,9 +25,9 @@ export const updateProfile = async (userData) => {
   return data
 }
 
-export const changePassword = async (currentPassword, newPassword) => {
-  const { data } = await axios.put('/auth/change-password', { currentPassword, newPassword })
-  return data
+export const changePassword = async (data) => {
+  const { data: response } = await axios.put('/auth/change-password', data)
+  return response
 }
 
 export const forgotPassword = async (email) => {

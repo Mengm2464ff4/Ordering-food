@@ -4,7 +4,8 @@ import {
   login as loginApi,
   register as registerApi,
   getProfile,
-  updateProfile as updateProfileApi
+  updateProfile as updateProfileApi,
+  changePassword as changePasswordApi
 } from '../api/authApi'
 
 export const AuthContext = createContext()
@@ -112,6 +113,17 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
+  const changePassword = async (data) => {
+  try {
+    await changePasswordApi(data)
+    toast.success('Password changed successfully')
+    return true
+  } catch (error) {
+    toast.error(error.response?.data?.message || 'Unable to change password')
+    return false
+  }
+}
+
   const isAdmin = () => user?.role === 'admin'
   const isAuthenticated = () => !!user
   const getToken = () => user?.token
@@ -126,7 +138,8 @@ export const AuthProvider = ({ children }) => {
       updateProfile,
       isAdmin,
       isAuthenticated,
-      getToken
+      getToken,
+      changePassword
     }}>
       {children}
     </AuthContext.Provider>
