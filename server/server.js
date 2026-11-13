@@ -30,11 +30,11 @@ const adminRoutes = require('./routes/adminRoutes')
 const { errorMiddleware } = require('./middleware/errorMiddleware')
 const { notFoundMiddleware } = require('./middleware/notFoundMiddleware')
 
-
-
-
 // Initialize express app
 const app = express()
+
+// ✅ បន្ថែមបន្ទាត់នេះ ដើម្បីដោះស្រាយ X-Forwarded-For
+app.set('trust proxy', 1)
 
 // ====================
 // Security Middleware
@@ -49,7 +49,6 @@ app.use(cors({
   credentials: true,
   optionsSuccessStatus: 200,
 }))
-
 
 // Rate limiting
 const limiter = rateLimit({
@@ -201,11 +200,7 @@ const startServer = async () => {
   }
 }
 
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason)
-})
-// Handle unhandled promise rejections
+// Handle unhandled promise rejections (only once)
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason)
   process.exit(1)
