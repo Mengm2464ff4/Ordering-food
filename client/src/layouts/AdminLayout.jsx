@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { Outlet, useLocation, Navigate } from 'react-router-dom'
-import { FiMenu, FiBell, FiUser, FiLogOut, FiChevronDown } from 'react-icons/fi'
+import { Outlet, useLocation, Navigate, Link } from 'react-router-dom' // ✅ បន្ថែម Link
+import { FiMenu, FiUser, FiLogOut, FiChevronDown, FiHome } from 'react-icons/fi' // ✅ បន្ថែម FiHome
 
 const AdminLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
@@ -58,21 +58,63 @@ const AdminLayout = () => {
     window.location.href = '/login'
   }
 
+  // Menu Items
+  const menuItems = [
+    { path: '/admin/dashboard', label: 'Dashboard' },
+    { path: '/admin/foods', label: 'Foods' },
+    { path: '/admin/orders', label: 'Orders' },
+    { path: '/admin/users', label: 'Users' },
+    { path: '/admin/payments', label: 'Payments' },
+  ]
+
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Sidebar */}
-      <div className={`fixed top-0 left-0 h-full z-40 transition-all duration-300 w-64 bg-gray-900 text-white
+      <div className={`fixed top-0 left-0 h-full z-40 transition-all duration-300 w-64 bg-gray-900 text-white flex flex-col
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:translate-x-0`}>
-        <div className="p-4">
-          <h2 className="text-2xl font-bold text-orange-500 mb-8">FoodOrder Admin</h2>
-          <nav>
-            <a href="/admin/dashboard" className="block py-2 px-4 hover:bg-gray-800 rounded mb-2">Dashboard</a>
-            <a href="/admin/foods" className="block py-2 px-4 hover:bg-gray-800 rounded mb-2">Foods</a>
-            <a href="/admin/orders" className="block py-2 px-4 hover:bg-gray-800 rounded mb-2">Orders</a>
-            <a href="/admin/users" className="block py-2 px-4 hover:bg-gray-800 rounded mb-2">Users</a>
-            <a href="/admin/payments" className="block py-2 px-4 hover:bg-gray-800 rounded mb-2">Payments</a>
-          </nav>
+        
+        {/* Logo */}
+        <div className="p-6 border-b border-gray-800">
+          <h2 className="text-2xl font-bold text-orange-500">FoodOrder Admin</h2>
+        </div>
+
+        {/* Menu Items */}
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+          {menuItems.map((item) => {
+            const isActive = location.pathname === item.path
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`block py-3 px-4 rounded-lg transition-colors ${
+                  isActive 
+                    ? 'bg-orange-500 text-white font-medium' 
+                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                }`}
+              >
+                {item.label}
+              </Link>
+            )
+          })}
+        </nav>
+
+        {/* Bottom Section - Back to Home & Logout */}
+        <div className="p-4 border-t border-gray-800 space-y-2">
+          <Link
+            to="/"
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+          >
+            <FiHome className="text-xl" />
+            <span>Back to Home</span>
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-400 hover:bg-red-900/20 hover:text-red-300 transition-colors"
+          >
+            <FiLogOut className="text-xl" />
+            <span>Logout</span>
+          </button>
         </div>
       </div>
 
