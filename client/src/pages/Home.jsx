@@ -194,7 +194,7 @@ const Home = () => {
         </section>
       )}
 
-      {/* Popular Foods Section */}
+           {/* Popular Foods Section */}
       <section className="py-16 bg-white">
         <div className="container mx-auto px-4">
           <motion.div 
@@ -216,7 +216,7 @@ const Home = () => {
               initial="initial"
               whileInView="animate"
               viewport={{ once: true }}
-              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+              className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6" // ✅ ប្តូរនៅទីនេះ
             >
               {popularFoods?.slice(0, 10).map((food, index) => (
                 <motion.div key={food._id} variants={fadeInUp}>
