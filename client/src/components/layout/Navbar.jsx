@@ -39,18 +39,21 @@ const Navbar = () => {
             </button>
             
             {user ? (
-              <div className="relative group">
-                <button className="flex items-center space-x-2">
+              <div className="relative group flex items-center h-full">
+                <button className="flex items-center space-x-2 py-2">
                   <FiUser className="text-xl" />
                   <span>{user.name}</span>
                 </button>
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg hidden group-hover:block">
-                  <Link to="/profile" className="block px-4 py-2 hover:bg-gray-100">Profile</Link>
-                  <Link to="/orders" className="block px-4 py-2 hover:bg-gray-100">My Orders</Link>
-                  {user.role === 'admin' && (
-                    <Link to="/admin/dashboard" className="block px-4 py-2 hover:bg-gray-100">Admin Panel</Link>
-                  )}
-                  <button onClick={logout} className="block w-full text-left px-4 py-2 hover:bg-gray-100">Logout</button>
+                {/* ✅ ប្តូរពី mt-2 ទៅជា top-full និង pt-2 ដើម្បីឱ្យវាជាប់គ្នា */}
+                <div className="absolute right-0 top-full pt-2 w-48 hidden group-hover:block z-50">
+                  <div className="bg-white rounded-md shadow-lg py-1">
+                    <Link to="/profile" className="block px-4 py-2 hover:bg-gray-100">Profile</Link>
+                    <Link to="/orders" className="block px-4 py-2 hover:bg-gray-100">My Orders</Link>
+                    {user.role === 'admin' && (
+                      <Link to="/admin/dashboard" className="block px-4 py-2 hover:bg-gray-100">Admin Panel</Link>
+                    )}
+                    <button onClick={logout} className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-red-500">Logout</button>
+                  </div>
                 </div>
               </div>
             ) : (
