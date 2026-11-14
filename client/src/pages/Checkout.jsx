@@ -1,10 +1,13 @@
 import React, { useState, useContext, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
+import axios from 'axios' 
+import toast from 'react-hot-toast' 
 import { AuthContext } from '../context/AuthContext'
 import { CartContext } from '../context/CartContext'
 import { OrderContext } from '../context/OrderContext'
 import { FiMapPin, FiPhone, FiUser, FiMail, FiCreditCard, FiTruck, FiCheckCircle } from 'react-icons/fi'
+import QRCode from 'react-qr-code'
 import Button from '../components/common/Button'
 import Input from '../components/common/Input'
 
@@ -15,6 +18,12 @@ const Checkout = () => {
   const navigate = useNavigate()
   const [paymentMethod, setPaymentMethod] = useState('KHQR')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showQR, setShowQR] = useState(false)
+
+
+  const [qrData, setQrData] = useState('')
+  const [paymentId, setPaymentId] = useState(null)
+  const [orderId, setOrderId] = useState(null)
 
   const {
     register,
@@ -35,7 +44,6 @@ const Checkout = () => {
     }
   }, [user, setValue])
 
-  // Redirect if cart is empty
   useEffect(() => {
     if (cartItems.length === 0) {
       navigate('/cart')
@@ -73,23 +81,84 @@ const Checkout = () => {
     }
 
     const order = await createNewOrder(orderData)
-    
-    if (order) {
-      const orderId = order._id || order.id
-      if (!orderId) {
-        setIsSubmitting(false)
-        return
-      }
 
-      clearCart()
-      if (paymentMethod === 'KHQR') {
-        navigate(`/payment/${orderId}`, { state: { order } })
-      } else {
-        navigate(`/orders/${orderId}`, { state: { success: true } })
+    if (order && paymentMethod === 'KHQR') {
+      try {
+        const response = await axios.post(
+          '/api/payments/khqr',
+          { orderId: order._id, amount: total },
+          { headers: { Authorization: `Bearer ${user.token}` } }
+        )
+
+        setQrData(response.data.qrData)
+        setPaymentId(response.data.paymentId)
+        setOrderId(order._id) 
+        setShowQR(true)
+        clearCart()
+      } catch (error) {
+        toast.error('Failed to create QR code')
       }
+    } else if (order) {
+      clearCart()
+      navigate(`/orders/${order._id}`, { state: { success: true } })
     }
-    
+
     setIsSubmitting(false)
+  }
+
+  // ✅ ពិនិត្យការទូទាត់រាល់ ៣ វិនាទី
+  useEffect(() => {
+    let interval
+    if (showQR && paymentId) {
+      interval = setInterval(async () => {
+        try {
+          const response = await axios.post(
+            '/api/payments/verify',
+            { paymentId },
+            { headers: { Authorization: `Bearer ${user.token}` } }
+          )
+
+          if (response.data.paid) {
+            clearInterval(interval)
+            toast.success('Payment successful!')
+            navigate(`/orders/${orderId}`)
+          }
+        } catch (error) {
+          console.error('Payment check error:', error)
+        }
+      }, 3000)
+    }
+    return () => clearInterval(interval)
+  }, [showQR, paymentId, orderId, navigate, user])
+
+  if (showQR) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <FiCheckCircle className="text-green-500 text-4xl" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Scan to Pay</h2>
+          <p className="text-gray-600 mb-6">
+            Please scan the QR code below with your banking app to complete the payment of{' '}
+            <strong className="text-gray-900">${total.toFixed(2)}</strong>.
+          </p>
+          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 mb-6 inline-block">
+            <QRCode value={qrData} size={200} />
+          </div>
+          <p className="text-sm text-gray-500 mb-6">
+            After payment, your order will be confirmed automatically.
+          </p>
+          <Button
+            onClick={() => navigate('/orders')}
+            variant="primary"
+            className="w-full"
+          >
+            View My Orders
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (

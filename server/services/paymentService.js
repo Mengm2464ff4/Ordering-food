@@ -37,40 +37,46 @@ class PaymentService {
     }
   }
 
-  async verifyKHQRPayment(paymentId, transactionId) {
-    try {
-      const payment = await Payment.findById(paymentId)
-      if (!payment) {
-        return { success: false, error: 'Payment not found' }
-      }
-
-      const verification = await khqrService.verifyPayment(transactionId)
-
-      if (verification.status === 'completed') {
-        payment.status = 'completed'
-        payment.transactionId = transactionId
-        payment.paidAt = Date.now()
-        await payment.save()
-
-        // Update order
-        await Order.findByIdAndUpdate(payment.order, {
-          isPaid: true,
-          paidAt: Date.now(),
-        })
-
-        return { success: true, status: 'completed' }
-      } else if (verification.status === 'failed') {
-        payment.status = 'failed'
-        await payment.save()
-        return { success: false, status: 'failed' }
-      }
-
-      return { success: false, status: 'pending' }
-    } catch (error) {
-      console.error('Payment verification error:', error)
-      return { success: false, error: error.message }
+async verifyKHQRPayment(paymentId, transactionId) {
+  try {
+    const payment = await Payment.findById(paymentId)
+    if (!payment) {
+      return { success: false, error: 'Payment not found' }
     }
+
+    
+    const md5Hash = payment.khqrData?.md5
+    if (!md5Hash) {
+      return { success: false, error: 'No MD5 hash found for this payment' }
+    }
+
+  
+    const verification = await khqrService.verifyPayment(transactionId, md5Hash)
+
+    if (verification.status === 'completed') {
+      payment.status = 'completed'
+      payment.transactionId = verification.transactionId || transactionId
+      payment.paidAt = verification.paidAt || Date.now()
+      await payment.save()
+
+      await Order.findByIdAndUpdate(payment.order, {
+        isPaid: true,
+        paidAt: Date.now(),
+      })
+
+      return { success: true, status: 'completed' }
+    } else if (verification.status === 'failed') {
+      payment.status = 'failed'
+      await payment.save()
+      return { success: false, status: 'failed' }
+    }
+
+    return { success: false, status: 'pending' }
+  } catch (error) {
+    console.error('Payment verification error:', error)
+    return { success: false, error: error.message }
   }
+}
 
   async getPaymentStatus(paymentId) {
     const payment = await Payment.findById(paymentId)

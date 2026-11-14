@@ -81,34 +81,39 @@ const verifyPayment = asyncHandler(async (req, res) => {
     throw new Error('Payment not found')
   }
 
-  // Verify payment with KHQR service
+ 
+  const md5Hash = payment.khqrData?.md5
+  if (!md5Hash) {
+    res.status(400)
+    throw new Error('No MD5 hash found for this payment')
+  }
+
+
   const verification = await khqrService.verifyPayment(
     transactionId || payment.khqrData?.transactionId,
-    payment.khqrData?.md5
+    md5Hash
   )
 
   if (verification.status === 'completed') {
     payment.status = 'completed'
-    payment.transactionId = transactionId
+    payment.transactionId = verification.transactionId || transactionId
     payment.paidAt = Date.now()
     await payment.save()
 
-    // Update order
     const order = await Order.findById(payment.order)
     order.isPaid = true
     order.paidAt = Date.now()
     await order.save()
 
-    // Send notification
     await sendPaymentNotification(payment)
 
-    res.json({ status: 'success', message: 'Payment verified successfully' })
+    res.json({ status: 'success', message: 'Payment verified successfully', paid: true })
   } else if (verification.status === 'failed') {
     payment.status = 'failed'
     await payment.save()
-    res.json({ status: 'failed', message: 'Payment verification failed' })
+    res.json({ status: 'failed', message: 'Payment verification failed', paid: false })
   } else {
-    res.json({ status: 'pending', message: 'Payment pending' })
+    res.json({ status: 'pending', message: 'Payment pending', paid: false })
   }
 })
 
