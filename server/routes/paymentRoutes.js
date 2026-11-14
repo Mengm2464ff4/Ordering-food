@@ -7,18 +7,24 @@ const {
   getPaymentHistory,
   getPaymentByOrder,
   refundPayment,
+  createABAPayment,
+  abaCallback,
 } = require('../controllers/paymentController')
 const { protect, admin } = require('../middleware/authMiddleware')
 const router = express.Router()
 
-// User routes
+// ==================== USER ROUTES ====================
 router.post('/khqr', protect, createKHQRPayment)
 router.post('/verify', protect, verifyPayment)
+
+router.post('/aba-payway', protect, createABAPayment)
+router.post('/aba-callback', abaCallback) 
+
 router.get('/status/:id', protect, getPaymentStatus)
 router.get('/history', protect, getPaymentHistory)
 router.get('/order/:orderId', protect, getPaymentByOrder)
 
-// Admin routes
+// ==================== ADMIN ROUTES ====================
 router.get('/', protect, admin, getPayments)
 router.post('/:id/refund', protect, admin, refundPayment)
 
