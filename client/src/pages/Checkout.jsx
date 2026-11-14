@@ -55,56 +55,58 @@ const Checkout = () => {
   const tax = getTaxAmount()
   const total = getCartTotal()
 
-  const onSubmit = async (data) => {
-    setIsSubmitting(true)
+const onSubmit = async (data) => {
+  setIsSubmitting(true)
 
-    const orderData = {
-      orderItems: cartItems.map(item => ({
-        food: item.food,
-        name: item.name,
-        quantity: item.quantity,
-        price: item.price,
-        image: item.image,
-      })),
-      shippingAddress: {
-        street: data.street,
-        city: data.city,
-        district: data.district,
-        commune: data.commune,
-        phone: data.phone,
-      },
-      paymentMethod,
-      itemsPrice: subtotal,
-      taxPrice: tax,
-      deliveryPrice: deliveryFee,
-      totalPrice: total,
-    }
-
-    const order = await createNewOrder(orderData)
-
-    if (order && paymentMethod === 'KHQR') {
-      try {
-        const response = await axios.post(
-          '/payments/khqr',
-          { orderId: order._id, amount: total },
-          { headers: { Authorization: `Bearer ${user.token}` } }
-        )
-
-        setQrData(response.data.qrData)
-        setPaymentId(response.data.paymentId)
-        setOrderId(order._id) 
-        setShowQR(true)
-        clearCart()
-      } catch (error) {
-        toast.error('Failed to create QR code')
-      }
-    } else if (order) {
-      clearCart()
-      navigate(`/orders/${order._id}`, { state: { success: true } })
-    }
-
-    setIsSubmitting(false)
+  const orderData = {
+    orderItems: cartItems.map(item => ({
+      food: item.food,
+      name: item.name,
+      quantity: item.quantity,
+      price: item.price,
+      image: item.image,
+    })),
+    shippingAddress: {
+      street: data.street,
+      city: data.city,
+      district: data.district,
+      commune: data.commune,
+      phone: data.phone,
+    },
+    paymentMethod,
+    itemsPrice: subtotal,
+    taxPrice: tax,
+    deliveryPrice: deliveryFee,
+    totalPrice: total,
   }
+
+  const order = await createNewOrder(orderData)
+
+  if (order && paymentMethod === 'KHQR') {
+    try {
+      const response = await axios.post(
+        '/payments/khqr',
+        { orderId: order._id, amount: total }
+      )
+
+      setQrData(response.data.qrData)
+      setPaymentId(response.data.paymentId)
+      setOrderId(order._id)
+      setShowQR(true)
+
+      setTimeout(() => {
+        clearCart()
+      }, 1000)
+    } catch (error) {
+      toast.error('Failed to create QR code')
+    }
+  } else if (order) {
+    clearCart()
+    navigate(`/orders/${order._id}`, { state: { success: true } })
+  }
+
+  setIsSubmitting(false)
+}
 
   useEffect(() => {
     let interval
