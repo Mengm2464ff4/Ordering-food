@@ -1,8 +1,8 @@
 import React, { useState, useContext, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
-import axios from '../api/axios' 
-import toast from 'react-hot-toast' 
+import axios from '../api/axios'
+import toast from 'react-hot-toast'
 import { AuthContext } from '../context/AuthContext'
 import { CartContext } from '../context/CartContext'
 import { OrderContext } from '../context/OrderContext'
@@ -19,8 +19,6 @@ const Checkout = () => {
   const [paymentMethod, setPaymentMethod] = useState('KHQR')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showQR, setShowQR] = useState(false)
-
-
   const [qrData, setQrData] = useState('')
   const [paymentId, setPaymentId] = useState(null)
   const [orderId, setOrderId] = useState(null)
@@ -45,79 +43,79 @@ const Checkout = () => {
   }, [user, setValue])
 
   useEffect(() => {
-  if (cartItems.length === 0 && !showQR) {
-    navigate('/cart')
-  }
-}, [cartItems, navigate, showQR])
+    if (cartItems.length === 0 && !showQR) {
+      navigate('/cart')
+    }
+  }, [cartItems, navigate, showQR])
 
   const subtotal = getCartSubtotal()
   const deliveryFee = getDeliveryFee()
   const tax = getTaxAmount()
   const total = getCartTotal()
 
-const onSubmit = async (data) => {
-  setIsSubmitting(true)
+  const onSubmit = async (data) => {
+    setIsSubmitting(true)
 
-  const orderData = {
-    orderItems: cartItems.map(item => ({
-      food: item.food,
+    // ✅ បង្កើត orderItems ដោយប្រើ ID ត្រឹមត្រូវ
+    const orderItems = cartItems.map(item => ({
+      food: item.food?._id || item.food, // ប្រើ ID ប្រសិនបើវាជា Object
       name: item.name,
       quantity: item.quantity,
       price: item.price,
       image: item.image,
-    })),
-    shippingAddress: {
-      street: data.street,
-      city: data.city,
-      district: data.district,
-      commune: data.commune,
-      phone: data.phone,
-    },
-    paymentMethod,
-    itemsPrice: subtotal,
-    taxPrice: tax,
-    deliveryPrice: deliveryFee,
-    totalPrice: total,
-  }
+    }))
 
-  const order = await createNewOrder(orderData)
-
-  if (order && paymentMethod === 'KHQR') {
-    try {
-      const response = await axios.post(
-        '/payments/khqr',
-        { orderId: order._id, amount: total }
-      )
-
-      setQrData(response.data.qrData)
-      setPaymentId(response.data.paymentId)
-      setOrderId(order._id)
-      setShowQR(true)
-
-      setTimeout(() => {
-        clearCart()
-      }, 1000)
-    } catch (error) {
-      toast.error('Failed to create QR code')
+    const orderData = {
+      orderItems,
+      shippingAddress: {
+        street: data.street,
+        city: data.city,
+        district: data.district,
+        commune: data.commune,
+        phone: data.phone,
+      },
+      paymentMethod,
+      itemsPrice: subtotal,
+      taxPrice: tax,
+      deliveryPrice: deliveryFee,
+      totalPrice: total,
     }
-  } else if (order) {
-    clearCart()
-    navigate(`/orders/${order._id}`, { state: { success: true } })
+
+    const order = await createNewOrder(orderData)
+
+    if (order && paymentMethod === 'KHQR') {
+      try {
+        const response = await axios.post('/payments/khqr', {
+          orderId: order._id,
+          amount: total,
+        })
+
+        setQrData(response.data.qrData)
+        setPaymentId(response.data.paymentId)
+        setOrderId(order._id)
+        setShowQR(true)
+
+        setTimeout(() => {
+          clearCart()
+        }, 1000)
+      } catch (error) {
+        toast.error('Failed to create QR code')
+      }
+    } else if (order) {
+      clearCart()
+      navigate(`/orders/${order._id}`, { state: { success: true } })
+    }
+
+    setIsSubmitting(false)
   }
 
-  setIsSubmitting(false)
-}
-
+  // ✅ ពិនិត្យការទូទាត់រាល់ ៣ វិនាទី
   useEffect(() => {
     let interval
     if (showQR && paymentId) {
       interval = setInterval(async () => {
         try {
-          const response = await axios.post(
-            '/payments/verify',
-            { paymentId },
-            { headers: { Authorization: `Bearer ${user.token}` } }
-          )
+          const response = await axios.post('/payments/verify', { paymentId })
 
           if (response.data.paid) {
             clearInterval(interval)
@@ -130,7 +128,7 @@ const onSubmit = async (data) => {
       }, 3000)
     }
     return () => clearInterval(interval)
-  }, [showQR, paymentId, orderId, navigate, user])
+  }, [showQR, paymentId, orderId, navigate])
 
   if (showQR) {
     return (
@@ -233,11 +231,7 @@ const onSubmit = async (data) => {
                   validation={{ required: 'District is required' }}
                   error={errors.district?.message}
                 />
-                <Input
-                  label="Commune"
-                  name="commune"
-                  register={register}
-                />
+                <Input label="Commune" name="commune" register={register} />
               </div>
             </div>
           </div>
