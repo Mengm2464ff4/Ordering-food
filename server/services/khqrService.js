@@ -9,6 +9,7 @@ class KHQRService {
     this.bakongAccount = (
       process.env.KHQR_BAKONG_ACCOUNT ||
       process.env.KHQR_ACCOUNT_ID ||
+      process.env.BAKONG_ACCOUNT_ID ||
       ''
     ).trim().toLowerCase()
 
