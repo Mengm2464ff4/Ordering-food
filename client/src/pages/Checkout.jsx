@@ -45,10 +45,10 @@ const Checkout = () => {
   }, [user, setValue])
 
   useEffect(() => {
-    if (cartItems.length === 0) {
-      navigate('/cart')
-    }
-  }, [cartItems, navigate])
+  if (cartItems.length === 0 && !showQR) {
+    navigate('/cart')
+  }
+}, [cartItems, navigate, showQR])
 
   const subtotal = getCartSubtotal()
   const deliveryFee = getDeliveryFee()
