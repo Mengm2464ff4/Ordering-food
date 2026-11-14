@@ -1,7 +1,7 @@
 import React, { useState, useContext, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
-import axios from 'axios' 
+import axios from '../api/axios' 
 import toast from 'react-hot-toast' 
 import { AuthContext } from '../context/AuthContext'
 import { CartContext } from '../context/CartContext'
@@ -85,7 +85,7 @@ const Checkout = () => {
     if (order && paymentMethod === 'KHQR') {
       try {
         const response = await axios.post(
-          '/api/payments/khqr',
+          '/payments/khqr',
           { orderId: order._id, amount: total },
           { headers: { Authorization: `Bearer ${user.token}` } }
         )
@@ -106,14 +106,13 @@ const Checkout = () => {
     setIsSubmitting(false)
   }
 
-  // ✅ ពិនិត្យការទូទាត់រាល់ ៣ វិនាទី
   useEffect(() => {
     let interval
     if (showQR && paymentId) {
       interval = setInterval(async () => {
         try {
           const response = await axios.post(
-            '/api/payments/verify',
+            '/payments/verify',
             { paymentId },
             { headers: { Authorization: `Bearer ${user.token}` } }
           )
