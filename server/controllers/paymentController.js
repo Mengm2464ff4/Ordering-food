@@ -205,14 +205,25 @@ const createABAPayment = asyncHandler(async (req, res) => {
   paymentData.hash = createPurchaseHash(paymentData, apiKey)
 
   try {
+    // ✅ We must send this as application/x-www-form-urlencoded, not JSON
+    const formData = new URLSearchParams()
+    for (const key in paymentData) {
+      formData.append(key, paymentData[key])
+    }
+
     const response = await axios.post(
       `${baseUrl}/api/payment-gateway/v1/payments/purchase`,
-      paymentData,
-      { headers: { 'Content-Type': 'application/json' } } // Ensure JSON response
+      formData.toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
     )
 
-    // ✅ If PayWay returns a checkout URL (redirect mode)
-    const checkoutUrl = response.data.checkout_url || `https://checkout.payway.com.kh/checkout/${Buffer.from(JSON.stringify({ tran_id: tranId })).toString('base64')}`;
+    // ✅ ABA gives us the exact URL to redirect the user to
+    const checkoutUrl = response.data.checkout_url
+
+    if (!checkoutUrl) {
+      console.log('ABA Response:', response.data)
+      throw new Error('No checkout URL returned from ABA')
+    }
 
     // Save to DB
     const payment = await Payment.create({
@@ -227,7 +238,7 @@ const createABAPayment = asyncHandler(async (req, res) => {
 
     return res.json({
       paymentId: payment._id,
-      checkoutUrl: checkoutUrl, // Send this to the frontend!
+      checkoutUrl: checkoutUrl,
       transactionId: tranId,
       amount: payment.amount,
       status: payment.status,
