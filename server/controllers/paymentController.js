@@ -180,7 +180,7 @@ const createABAPayment = asyncHandler(async (req, res) => {
 
   const merchantId = process.env.PAYWAY_MERCHANT_ID
   const apiKey = process.env.PAYWAY_API_KEY
-  const baseUrl = process.env.PAYWAY_API_URL || 'https://checkout.payway.com.kh' // Changed to production
+  const baseUrl = process.env.PAYWAY_API_URL || 'https://checkout.payway.com.kh'
 
   if (!merchantId || !apiKey) {
     res.status(500)
@@ -225,6 +225,9 @@ const createABAPayment = asyncHandler(async (req, res) => {
       `${baseUrl}/api/payment-gateway/v1/payments/purchase`,
       paymentData
     )
+
+    // 🔥 LOG THE EXACT RESPONSE
+    console.log('👉 PAYWAY RAW RESPONSE:', JSON.stringify(response.data, null, 2))
 
     const qrString = response.data.qrString
     const qrImage = response.data.qrImage
