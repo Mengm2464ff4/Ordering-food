@@ -5,6 +5,13 @@ const Order = require('../models/Order')
 const { khqrService } = require('../services/khqrService')
 const asyncHandler = require('express-async-handler')
 
+
+const createABAHash = (data, apiKey) => {
+  const sortedKeys = Object.keys(data).sort()
+  const str = sortedKeys.map(key => `${key}=${data[key]}`).join('&')
+  return crypto.createHmac('sha512', apiKey).update(str).digest('base64')
+}
+
 // ==================== KHQR PAYMENT ====================
 
 // @desc    Create KHQR payment
@@ -131,14 +138,6 @@ const verifyPayment = asyncHandler(async (req, res) => {
     return res.json({ status: 'pending', paid: false })
   }
 })
-
-// ==================== ABA PAYWAY PAYMENT ====================
-
-const createABAHash = (data, apiKey) => {
-  const sortedKeys = Object.keys(data).sort()
-  const str = sortedKeys.map(key => `${key}=${data[key]}`).join('&')
-  return crypto.createHmac('sha512', apiKey).update(str).digest('base64')
-}
 
 // @desc    Create ABA PayWay Payment
 // @route   POST /api/payments/aba-payway
@@ -368,6 +367,7 @@ const refundPayment = asyncHandler(async (req, res) => {
 
   res.json({ message: 'Payment refunded successfully', payment })
 })
+
 
 module.exports = {
   createKHQRPayment,
