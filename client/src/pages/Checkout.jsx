@@ -71,21 +71,21 @@ const Checkout = () => {
       image: item.image,
     }))
 
-    const orderData = {
-      orderItems,
-      shippingAddress: {
-        street: data.street,
-        city: data.city,
-        district: data.district,
-        commune: data.commune,
-        phone: data.phone,
-      },
-      paymentMethod,
-      itemsPrice: subtotal,
-      taxPrice: tax,
-      deliveryPrice: deliveryFee,
-      totalPrice: total,
-    }
+   const orderData = {
+  orderItems,
+  shippingAddress: {
+    street: data.street || 'N/A',
+    city: data.city || 'N/A',
+    district: data.district || 'N/A', // ✅ បំពេញដោយ 'N/A' ប្រសិនបើទទេ
+    commune: data.commune || 'N/A',
+    phone: data.phone || 'N/A',
+  },
+  paymentMethod,
+  itemsPrice: subtotal,
+  taxPrice: tax,
+  deliveryPrice: deliveryFee,
+  totalPrice: total,
+}
 
     const order = await createNewOrder(orderData)
 
