@@ -171,32 +171,72 @@ const verifyPayment = asyncHandler(async (req, res) => {
 const createABAPayment = asyncHandler(async (req, res) => {
   const { orderId, amount } = req.body
   const order = await Order.findById(orderId)
-  if (!order) { res.status(404); throw new Error('Order not found') }
+  if (!order) { 
+    res.status(404)
+    throw new Error('Order not found') 
+  }
+
+  // ✅ Use your Bakong Account (The one you said worked in your old project)
+  const bakongAccount = process.env.BAKONG_ACCOUNT_ID || '0963193606@abaa'
+  const merchantName = process.env.BAKONG_MERCHANT_NAME || 'VUTHY VUTHA'
+  const merchantCity = process.env.BAKONG_MERCHANT_CITY || 'Phnom Penh'
 
   const tranId = orderId.toString().slice(-10) + Date.now().toString().slice(-8)
+  const formattedAmount = parseFloat(amount).toFixed(2)
+  const expirationTimestamp = Date.now() + 15 * 60 * 1000 
 
-  // ✅ Use the exact Payment Link from your dashboard
-  // We append the amount so the user doesn't have to type it
-  const paymentLink = process.env.PAYWAY_PAYMENT_LINK || 'https://link.payway.com.kh/ABAPAYm55533132'
-  
-  // Save to DB
-  const payment = await Payment.create({
-    order: orderId,
-    user: req.user._id,
-    amount: amount,
-    method: 'ABA_PAYWAY',
-    transactionId: tranId,
-    khqrData: { checkoutUrl: paymentLink },
-    status: 'pending',
-  })
+  try {
+    const { BakongKHQR, khqrData, IndividualInfo } = require('bakong-khqr')
+    
+    // ✅ Generate the QR data locally
+    const optionalData = {
+      currency: khqrData.currency.usd,
+      amount: formattedAmount,
+      billNumber: tranId,
+      expirationTimestamp: expirationTimestamp
+    }
 
-  return res.json({
-    paymentId: payment._id,
-    checkoutUrl: paymentLink, // Frontend will redirect here
-    transactionId: tranId,
-    amount: payment.amount,
-    status: payment.status,
-  })
+    const individualInfo = new IndividualInfo(
+      bakongAccount,
+      merchantName,
+      merchantCity,
+      optionalData
+    )
+
+    const khqr = new BakongKHQR()
+    const qrResponse = khqr.generateIndividual(individualInfo)
+
+    if (!qrResponse || qrResponse.status?.code !== 0) {
+      console.log('Bakong SDK Error:', qrResponse)
+      throw new Error(qrResponse?.status?.message || 'SDK failed to generate QR')
+    }
+
+    const qrString = qrResponse.data.qr
+
+    // Save to database
+    const payment = await Payment.create({
+      order: orderId,
+      user: req.user._id,
+      amount: amount,
+      method: 'ABA_PAYWAY',
+      transactionId: tranId,
+      khqrData: { qrString: qrString },
+      status: 'pending',
+    })
+
+    // ✅ Return the QR string to the frontend so it displays the QR image
+    return res.json({
+      paymentId: payment._id,
+      qrData: qrString, 
+      transactionId: tranId,
+      amount: payment.amount,
+      status: payment.status,
+    })
+  } catch (error) {
+    console.error('Bakong QR generation error:', error.message)
+    res.status(500)
+    throw new Error('Failed to generate Bakong QR code')
+  }
 })
 
 const abaCallback = asyncHandler(async (req, res) => {
