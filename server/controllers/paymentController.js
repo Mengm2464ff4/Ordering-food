@@ -1,3 +1,5 @@
+const mongoose = require('mongoose') // ✅ បន្ថែម Import នេះនៅខាងលើ
+
 const axios = require('axios')
 const crypto = require('crypto')
 const Payment = require('../models/Payment')
@@ -70,14 +72,16 @@ const createKHQRPayment = asyncHandler(async (req, res) => {
 // @desc    Verify KHQR payment
 // @route   POST /api/payments/verify
 // @access  Private
+
 const verifyPayment = asyncHandler(async (req, res) => {
   try {
     const { paymentId } = req.body
     console.log('🔍 1. verifyPayment called with paymentId:', paymentId)
 
-    if (!paymentId) {
-      console.log('❌ 2. Payment ID is missing')
-      return res.status(400).json({ status: 'error', message: 'Payment ID is required' })
+    // ✅ ត្រួតពិនិត្យថាតើ paymentId ជា ObjectId ត្រឹមត្រូវឬអត់
+    if (!paymentId || !mongoose.Types.ObjectId.isValid(paymentId)) {
+      console.log('❌ 2. Invalid paymentId format:', paymentId)
+      return res.status(400).json({ status: 'error', message: 'Invalid payment ID format' })
     }
 
     const payment = await Payment.findById(paymentId)
@@ -110,9 +114,6 @@ const verifyPayment = asyncHandler(async (req, res) => {
     const apiKey = process.env.PAYWAY_API_KEY
     const baseUrl = process.env.PAYWAY_API_URL || 'https://checkout-sandbox.payway.com.kh'
 
-    console.log('🔍 7. Merchant ID:', merchantId ? 'Set' : 'Missing')
-    console.log('🔍 8. API Key:', apiKey ? 'Set' : 'Missing')
-
     if (!merchantId || !apiKey) {
       console.log('⚠️ 9. ABA credentials missing, returning pending')
       return res.json({ status: 'pending', paid: false })
@@ -123,12 +124,9 @@ const verifyPayment = asyncHandler(async (req, res) => {
       tran_id: payment.transactionId,
     }
 
-    console.log('🔍 10. Creating hash with statusData:', statusData)
     statusData.hash = createABAHash(statusData, apiKey)
-    console.log('🔍 11. Hash created successfully')
 
     try {
-      console.log('🔍 12. Calling ABA API:', `${baseUrl}/api/payment-gateway/v1/payments/check-transaction`)
       const response = await axios.post(
         `${baseUrl}/api/payment-gateway/v1/payments/check-transaction`,
         statusData
@@ -153,7 +151,6 @@ const verifyPayment = asyncHandler(async (req, res) => {
         return res.json({ status: 'success', paid: true })
       }
 
-      console.log('⚠️ 15. ABA payment pending, status:', status)
       return res.json({ status: 'pending', paid: false })
     } catch (error) {
       console.error('❌ 16. ABA verify error:', error.response?.data || error.message)
