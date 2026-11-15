@@ -7,57 +7,70 @@ const asyncHandler = require('express-async-handler')
 // @route   POST /api/orders
 // @access  Private
 const addOrderItems = asyncHandler(async (req, res) => {
-  const {
-    orderItems,
-    shippingAddress,
-    paymentMethod,
-    itemsPrice,
-    taxPrice,
-    deliveryPrice,
-    totalPrice,
-    instructions,
-  } = req.body
-
-  if (!orderItems || orderItems.length === 0) {
-    res.status(400)
-    throw new Error('No order items')
-  }
-
-  const order = new Order({
-    user: req.user._id,
-    orderItems,
-    shippingAddress,
-    paymentMethod,
-    itemsPrice,
-    taxPrice,
-    deliveryPrice,
-    totalPrice,
-    instructions,
-  })
-
-  const createdOrder = await order.save()
-
-  // ✅ ព្យាយាមផ្ញើ Telegram តែកុំឱ្យវាធ្វើឱ្យ Request បរាជ័យ
   try {
-    await sendOrderNotification(createdOrder)
-  } catch (error) {
-    console.error('Telegram notification failed:', error.message)
-  }
+    console.log('🔍 1. addOrderItems called')
+    console.log('🔍 2. req.body:', JSON.stringify(req.body, null, 2))
 
-  // ✅ ព្យាយាមបង្កើត Notification តែកុំឱ្យវាធ្វើឱ្យ Request បរាជ័យ
-  try {
-    await Notification.create({
+    const {
+      orderItems,
+      shippingAddress,
+      paymentMethod,
+      itemsPrice,
+      taxPrice,
+      deliveryPrice,
+      totalPrice,
+      instructions,
+    } = req.body
+
+    if (!orderItems || orderItems.length === 0) {
+      console.log('❌ 3. No order items')
+      res.status(400)
+      throw new Error('No order items')
+    }
+
+    console.log('🔍 4. Creating order with data...')
+
+    const order = new Order({
       user: req.user._id,
-      type: 'order',
-      title: 'New Order Created',
-      message: `Order #${createdOrder._id} has been created successfully`,
-      data: { orderId: createdOrder._id },
+      orderItems,
+      shippingAddress,
+      paymentMethod,
+      itemsPrice,
+      taxPrice,
+      deliveryPrice,
+      totalPrice,
+      instructions,
     })
-  } catch (error) {
-    console.error('Notification creation failed:', error.message)
-  }
 
-  res.status(201).json(createdOrder)
+    const createdOrder = await order.save()
+    console.log('✅ 5. Order created successfully:', createdOrder._id)
+
+    // Send Telegram notification (optional)
+    try {
+      await sendOrderNotification(createdOrder)
+    } catch (error) {
+      console.error('⚠️ Telegram notification failed:', error.message)
+    }
+
+    // Create notification for admin (optional)
+    try {
+      await Notification.create({
+        user: req.user._id,
+        type: 'order',
+        title: 'New Order Created',
+        message: `Order #${createdOrder._id} has been created successfully`,
+        data: { orderId: createdOrder._id },
+      })
+    } catch (error) {
+      console.error('⚠️ Notification creation failed:', error.message)
+    }
+
+    res.status(201).json(createdOrder)
+  } catch (error) {
+    console.error('❌ 6. addOrderItems error:', error)
+    res.status(500)
+    throw new Error(error.message || 'Failed to create order')
+  }
 })
 
 // @desc    Get order by ID
