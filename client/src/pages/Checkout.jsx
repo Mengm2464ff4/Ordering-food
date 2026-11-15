@@ -23,6 +23,9 @@ const Checkout = () => {
   const [paymentId, setPaymentId] = useState(null)
   const [orderId, setOrderId] = useState(null)
 
+  // ✅ បន្ថែម State សម្រាប់រក្សាទុកតម្លៃសរុបមុនពេល clearCart
+  const [finalTotal, setFinalTotal] = useState(0)
+
   const {
     register,
     handleSubmit,
@@ -56,9 +59,8 @@ const Checkout = () => {
   const onSubmit = async (data) => {
     setIsSubmitting(true)
 
-    // ✅ បង្កើត orderItems ដោយប្រើ ID ត្រឹមត្រូវ
     const orderItems = cartItems.map(item => ({
-      food: item.food?._id || item.food, // ប្រើ ID ប្រសិនបើវាជា Object
+      food: item.food?._id || item.food,
       name: item.name,
       quantity: item.quantity,
       price: item.price,
@@ -93,8 +95,13 @@ const Checkout = () => {
         setQrData(response.data.qrData)
         setPaymentId(response.data.paymentId)
         setOrderId(order._id)
+
+        // ✅ រក្សាទុកតម្លៃសរុបមុនពេល clearCart
+        setFinalTotal(total)
+
         setShowQR(true)
 
+        // សម្អាត Cart បន្ទាប់ពី ១ វិនាទី
         setTimeout(() => {
           clearCart()
         }, 1000)
@@ -140,7 +147,8 @@ const Checkout = () => {
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Scan to Pay</h2>
           <p className="text-gray-600 mb-6">
             Please scan the QR code below with your banking app to complete the payment of{' '}
-            <strong className="text-gray-900">${total.toFixed(2)}</strong>.
+            {/* ✅ ប្រើ finalTotal ជំនួស total */}
+            <strong className="text-gray-900">${finalTotal.toFixed(2)}</strong>.
           </p>
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 mb-6 inline-block">
             <QRCode value={qrData} size={200} />
