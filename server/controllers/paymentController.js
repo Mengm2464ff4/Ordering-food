@@ -71,53 +71,27 @@ const createKHQRPayment = asyncHandler(async (req, res) => {
 // @route   POST /api/payments/verify
 // @access  Private
 const verifyPayment = asyncHandler(async (req, res) => {
-  const { paymentId } = req.body
-  const payment = await Payment.findById(paymentId)
-  
-  if (!payment) {
-    res.status(404)
-    throw new Error('Payment not found')
-  }
+  try {
+    const { paymentId } = req.body
+    console.log('🔍 1. verifyPayment called with paymentId:', paymentId)
 
-  if (payment.transactionId?.startsWith('MOCK_')) {
-    payment.status = 'completed'
-    payment.paidAt = Date.now()
-    await payment.save()
-
-    const order = await Order.findById(payment.order)
-    if (order) {
-      order.isPaid = true
-      order.paidAt = Date.now()
-      await order.save()
+    if (!paymentId) {
+      console.log('❌ 2. Payment ID is missing')
+      return res.status(400).json({ status: 'error', message: 'Payment ID is required' })
     }
 
-    return res.json({ status: 'success', paid: true })
-  }
+    const payment = await Payment.findById(paymentId)
+    console.log('🔍 3. Payment found:', payment ? 'Yes' : 'No')
 
-  const merchantId = process.env.PAYWAY_MERCHANT_ID
-  const apiKey = process.env.PAYWAY_API_KEY
-  const baseUrl = process.env.PAYWAY_API_URL || 'https://checkout-sandbox.payway.com.kh'
+    if (!payment) {
+      console.log('❌ 4. Payment not found in database')
+      return res.status(404).json({ status: 'error', message: 'Payment not found' })
+    }
 
-  if (!merchantId || !apiKey) {
-    return res.json({ status: 'pending', paid: false })
-  }
+    console.log('🔍 5. Payment transactionId:', payment.transactionId)
 
-  const statusData = {
-    merchant_id: merchantId,
-    tran_id: payment.transactionId,
-  }
-
-  statusData.hash = createABAHash(statusData, apiKey)
-
-  try {
-    const response = await axios.post(
-      `${baseUrl}/api/payment-gateway/v1/payments/check-transaction`,
-      statusData
-    )
-
-    const { status } = response.data
-
-    if (status?.code === 0 || status === 0) {
+    if (payment.transactionId?.startsWith('MOCK_')) {
+      console.log('✅ 6. Mock payment detected, marking as completed')
       payment.status = 'completed'
       payment.paidAt = Date.now()
       await payment.save()
@@ -132,12 +106,65 @@ const verifyPayment = asyncHandler(async (req, res) => {
       return res.json({ status: 'success', paid: true })
     }
 
-    return res.json({ status: 'pending', paid: false })
+    const merchantId = process.env.PAYWAY_MERCHANT_ID
+    const apiKey = process.env.PAYWAY_API_KEY
+    const baseUrl = process.env.PAYWAY_API_URL || 'https://checkout-sandbox.payway.com.kh'
+
+    console.log('🔍 7. Merchant ID:', merchantId ? 'Set' : 'Missing')
+    console.log('🔍 8. API Key:', apiKey ? 'Set' : 'Missing')
+
+    if (!merchantId || !apiKey) {
+      console.log('⚠️ 9. ABA credentials missing, returning pending')
+      return res.json({ status: 'pending', paid: false })
+    }
+
+    const statusData = {
+      merchant_id: merchantId,
+      tran_id: payment.transactionId,
+    }
+
+    console.log('🔍 10. Creating hash with statusData:', statusData)
+    statusData.hash = createABAHash(statusData, apiKey)
+    console.log('🔍 11. Hash created successfully')
+
+    try {
+      console.log('🔍 12. Calling ABA API:', `${baseUrl}/api/payment-gateway/v1/payments/check-transaction`)
+      const response = await axios.post(
+        `${baseUrl}/api/payment-gateway/v1/payments/check-transaction`,
+        statusData
+      )
+
+      console.log('🔍 13. ABA API response:', response.data)
+      const { status } = response.data
+
+      if (status?.code === 0 || status === 0) {
+        console.log('✅ 14. ABA payment confirmed')
+        payment.status = 'completed'
+        payment.paidAt = Date.now()
+        await payment.save()
+
+        const order = await Order.findById(payment.order)
+        if (order) {
+          order.isPaid = true
+          order.paidAt = Date.now()
+          await order.save()
+        }
+
+        return res.json({ status: 'success', paid: true })
+      }
+
+      console.log('⚠️ 15. ABA payment pending, status:', status)
+      return res.json({ status: 'pending', paid: false })
+    } catch (error) {
+      console.error('❌ 16. ABA verify error:', error.response?.data || error.message)
+      return res.json({ status: 'pending', paid: false })
+    }
   } catch (error) {
-    console.error('ABA verify error:', error.response?.data || error.message)
-    return res.json({ status: 'pending', paid: false })
+    console.error('❌ 17. Outer verifyPayment error:', error)
+    return res.status(500).json({ status: 'error', message: error.message })
   }
 })
+
 
 // @desc    Create ABA PayWay Payment
 // @route   POST /api/payments/aba-payway
