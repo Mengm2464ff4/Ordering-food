@@ -18,12 +18,14 @@ const paymentSchema = new mongoose.Schema({
   },
   method: {
     type: String,
-    enum: ['KHQR', 'Cash'],
+    enum: ['KHQR', 'Cash', 'ABA_PAYWAY'], // ✅ Added ABA_PAYWAY here
     required: true,
   },
   khqrData: {
     qrCode: { type: String },
     qrData: { type: String },
+    qrString: { type: String }, // ✅ Added for ABA
+    qrImage: { type: String },  // ✅ Added for ABA
     md5: { type: String },
     transactionId: { type: String },
     currency: { type: String },
