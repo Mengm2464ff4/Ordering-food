@@ -177,109 +177,70 @@ const createABAPayment = asyncHandler(async (req, res) => {
     throw new Error('Order not found')
   }
 
-  if (!process.env.PAYWAY_MERCHANT_ID || !process.env.PAYWAY_API_KEY) {
-    const mockQrData = `MOCK_ABA_PAYMENT|Order:${orderId}|Amount:${amount}|Time:${Date.now()}`
+  const bakongToken = process.env.BAKONG_API_TOKEN
+  const bakongAccount = process.env.BAKONG_ACCOUNT_ID || '0963193606@abaa' 
+  const merchantName = process.env.BAKONG_MERCHANT_NAME || 'Vuthy Vutha'
+  const merchantCity = process.env.BAKONG_MERCHANT_CITY || 'Phnom Penh'
+
+  if (!bakongToken) {
+    res.status(500)
+    throw new Error('Bakong API Token is missing')
+  }
+
+  const tranId = orderId.toString().slice(-10) + Date.now().toString().slice(-8)
+
+  try {
+    // 1. Generate QR string using Bakong API
+    const qrResponse = await axios.post(
+      'https://api-bakong.nbc.gov.kh/v1/generate_qr',
+      {
+        bakongAccountID: bakongAccount,
+        merchantName: merchantName,
+        merchantCity: merchantCity,
+        amount: parseFloat(amount).toFixed(2),
+        currency: 'USD',
+        billNumber: tranId,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${bakongToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    )
+
+    // 2. Extract the QR string
+    const qrString = qrResponse.data?.data?.qr
+
+    if (!qrString) {
+      throw new Error('No QR code received from Bakong')
+    }
+
+    // 3. Save to database
     const payment = await Payment.create({
       order: orderId,
       user: req.user._id,
       amount: amount,
-      method: 'ABA_PAYWAY',
-      transactionId: `MOCK_${Date.now()}`,
-      khqrData: { qrData: mockQrData },
+      method: 'ABA_PAYWAY', // You can change this to 'Bakong' if you want
+      transactionId: tranId,
+      khqrData: {
+        qrString: qrString,
+      },
       status: 'pending',
     })
+
+    // 4. Return to frontend
     return res.json({
       paymentId: payment._id,
-      qrData: mockQrData,
+      qrData: qrString,
+      transactionId: tranId,
       amount: payment.amount,
       status: payment.status,
     })
-  }
-
-   const tranId = orderId.toString().slice(-10) + Date.now().toString().slice(-8)
-
-  // ✅ Use UTC time, format YYYYMMDDHHmmss
-  const now = new Date()
-  const reqTime =
-    now.getUTCFullYear().toString() +
-    String(now.getUTCMonth() + 1).padStart(2, '0') +
-    String(now.getUTCDate()).padStart(2, '0') +
-    String(now.getUTCHours()).padStart(2, '0') +
-    String(now.getUTCMinutes()).padStart(2, '0') +
-    String(now.getUTCSeconds()).padStart(2, '0')
-
-  const merchantId = process.env.PAYWAY_MERCHANT_ID
-  const apiKey = process.env.PAYWAY_API_KEY
-  const baseUrl = process.env.PAYWAY_API_URL || 'https://checkout-sandbox.payway.com.kh'
-
-  // ✅ return_url and cancel_url must be Base64-encoded before hashing and sending
-  const returnUrlEncoded = Buffer.from(
-    `${process.env.CLIENT_URL}/payment/success?orderId=${orderId}`
-  ).toString('base64')
-  const cancelUrlEncoded = Buffer.from(
-    `${process.env.CLIENT_URL}/payment/cancel?orderId=${orderId}`
-  ).toString('base64')
-
-  const paymentData = {
-    merchant_id: merchantId,
-    tran_id: tranId,
-    amount: parseFloat(amount).toFixed(2),
-    currency: 'USD',
-    req_time: reqTime,
-    type: 'purchase',
-    return_url: returnUrlEncoded,
-    cancel_url: cancelUrlEncoded,
-    continue_success_url: `${process.env.CLIENT_URL}/payment/success?orderId=${orderId}`,
-    payment_option: 'abapay_khqr',
-  }
-
-  paymentData.hash = createPurchaseHash(paymentData, apiKey)
-
-     try {
-    const response = await axios.post(
-      `${baseUrl}/api/payment-gateway/v1/payments/purchase`,
-      paymentData
-    )
-
-    // ✅ Grab the data directly from the root of the response
-    const qrString = response.data.qrString
-    const qrImage = response.data.qrImage
-    const checkoutUrl = response.data.checkout_url
-    const statusCode = response.data.status?.code
-
-    // ✅ Check for "00" (string) OR 0 (number)
-    if (statusCode === "00" || statusCode === 0 || qrString) {
-      const payment = await Payment.create({
-        order: orderId,
-        user: req.user._id,
-        amount: amount,
-        method: 'ABA_PAYWAY',
-        transactionId: tranId,
-        khqrData: {
-          qrString: qrString,
-          qrImage: qrImage,
-          checkoutUrl: checkoutUrl,
-        },
-        status: 'pending',
-      })
-
-      return res.json({
-        paymentId: payment._id,
-        qrData: qrString || qrImage,
-        qrImage: qrImage,
-        checkoutUrl: checkoutUrl,
-        transactionId: tranId,
-        amount: payment.amount,
-        status: payment.status,
-      })
-    }
-
-    res.status(400)
-    throw new Error('Failed to create ABA payment - No QR returned')
   } catch (error) {
-    console.error('ABA PayWay error:', error.response?.data || error.message)
+    console.error('Bakong API error:', error.response?.data || error.message)
     res.status(500)
-    throw new Error(error.response?.data?.status?.message || 'Failed to create QR code')
+    throw new Error(error.response?.data?.responseMessage || 'Failed to create Bakong QR code')
   }
 })
 
