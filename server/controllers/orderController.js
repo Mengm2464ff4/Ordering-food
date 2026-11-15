@@ -18,7 +18,7 @@ const addOrderItems = asyncHandler(async (req, res) => {
     instructions,
   } = req.body
 
-  if (orderItems && orderItems.length === 0) {
+  if (!orderItems || orderItems.length === 0) {
     res.status(400)
     throw new Error('No order items')
   }
@@ -37,17 +37,25 @@ const addOrderItems = asyncHandler(async (req, res) => {
 
   const createdOrder = await order.save()
 
-  // Send Telegram notification
-  await sendOrderNotification(createdOrder)
+  // ✅ ព្យាយាមផ្ញើ Telegram តែកុំឱ្យវាធ្វើឱ្យ Request បរាជ័យ
+  try {
+    await sendOrderNotification(createdOrder)
+  } catch (error) {
+    console.error('Telegram notification failed:', error.message)
+  }
 
-  // Create notification for admin
-  await Notification.create({
-    user: req.user._id,
-    type: 'order',
-    title: 'New Order Created',
-    message: `Order #${createdOrder._id} has been created successfully`,
-    data: { orderId: createdOrder._id },
-  })
+  // ✅ ព្យាយាមបង្កើត Notification តែកុំឱ្យវាធ្វើឱ្យ Request បរាជ័យ
+  try {
+    await Notification.create({
+      user: req.user._id,
+      type: 'order',
+      title: 'New Order Created',
+      message: `Order #${createdOrder._id} has been created successfully`,
+      data: { orderId: createdOrder._id },
+    })
+  } catch (error) {
+    console.error('Notification creation failed:', error.message)
+  }
 
   res.status(201).json(createdOrder)
 })
