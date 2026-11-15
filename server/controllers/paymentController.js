@@ -176,42 +176,89 @@ const createABAPayment = asyncHandler(async (req, res) => {
     throw new Error('Order not found') 
   }
 
+  const merchantId = process.env.PAYWAY_MERCHANT_ID
+  const apiKey = process.env.PAYWAY_API_KEY
+  const baseUrl = process.env.PAYWAY_API_URL || 'https://checkout.payway.com.kh'
+
   const tranId = orderId.toString().slice(-10) + Date.now().toString().slice(-8)
   
-  // ✅ We generate the exact URL format that PayWay Payment Links use.
-  // We put the transaction ID and amount into a Base64 string.
-  // PayWay will read this and show the checkout page.
-  const payload = {
+  // Generate UTC time (YYYYMMDDHHmmss)
+  const now = new Date()
+  const reqTime = now.getUTCFullYear().toString() +
+    String(now.getUTCMonth() + 1).padStart(2, '0') +
+    String(now.getUTCDate()).padStart(2, '0') +
+    String(now.getUTCHours()).padStart(2, '0') +
+    String(now.getUTCMinutes()).padStart(2, '0') +
+    String(now.getUTCSeconds()).padStart(2, '0')
+
+  const returnUrlEncoded = Buffer.from(`${process.env.CLIENT_URL}/payment/success?orderId=${orderId}`).toString('base64')
+  const cancelUrlEncoded = Buffer.from(`${process.env.CLIENT_URL}/payment/cancel?orderId=${orderId}`).toString('base64')
+
+  const paymentData = {
+    merchant_id: merchantId,
     tran_id: tranId,
     amount: parseFloat(amount).toFixed(2),
     currency: 'USD',
-    merchant_id: process.env.PAYWAY_MERCHANT_ID,
-    req_time: new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14),
+    req_time: reqTime,
+    type: 'purchase',
+    return_url: returnUrlEncoded,
+    cancel_url: cancelUrlEncoded,
+    continue_success_url: `${process.env.CLIENT_URL}/payment/success?orderId=${orderId}`,
+    payment_option: 'abapay_khqr',
   }
-  
-  const base64Data = Buffer.from(JSON.stringify(payload)).toString('base64')
-  
-  // Create the checkout URL using your Payment Link domain
-  const checkoutUrl = `https://link.payway.com.kh/checkout/${base64Data}`
 
-  // Save to DB
-  const payment = await Payment.create({
-    order: orderId,
-    user: req.user._id,
-    amount: amount,
-    method: 'ABA_PAYWAY',
-    transactionId: tranId,
-    khqrData: { checkoutUrl: checkoutUrl },
-    status: 'pending',
-  })
+  // Generate the Hash
+  paymentData.hash = createPurchaseHash(paymentData, apiKey)
 
-  return res.json({
-    paymentId: payment._id,
-    checkoutUrl: checkoutUrl,
-    transactionId: tranId,
-    amount: payment.amount,
-    status: payment.status,
-  })
+  try {
+    // ✅ CONVERT TO FORM URL ENCODED (This is the secret fix)
+    const formData = new URLSearchParams()
+    for (const key in paymentData) {
+      formData.append(key, paymentData[key])
+    }
+
+    const response = await axios.post(
+      `${baseUrl}/api/payment-gateway/v1/payments/purchase`,
+      formData.toString(),
+      { 
+        headers: { 
+          'Content-Type': 'application/x-www-form-urlencoded' 
+        } 
+      }
+    )
+
+    // ABA will return a valid checkout_url
+    const checkoutUrl = response.data.checkout_url
+
+    if (!checkoutUrl) {
+      console.log('ABA Response Missing URL:', response.data)
+      throw new Error('No checkout URL returned from ABA')
+    }
+
+    // Save to DB
+    const payment = await Payment.create({
+      order: orderId,
+      user: req.user._id,
+      amount: amount,
+      method: 'ABA_PAYWAY',
+      transactionId: tranId,
+      khqrData: { checkoutUrl: checkoutUrl },
+      status: 'pending',
+    })
+
+    return res.json({
+      paymentId: payment._id,
+      checkoutUrl: checkoutUrl,
+      transactionId: tranId,
+      amount: payment.amount,
+      status: payment.status,
+    })
+
+  } catch (error) {
+    console.error('ABA PayWay error:', error.response?.data || error.message)
+    res.status(500)
+    throw new Error(error.response?.data?.status?.message || 'Failed to create QR code')
+  }
 })
 
 const abaCallback = asyncHandler(async (req, res) => {
