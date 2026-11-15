@@ -168,42 +168,26 @@ const verifyPayment = asyncHandler(async (req, res) => {
 })
 
 // ==================== ABA PAYWAY / BAKONG ====================
-
 const createABAPayment = asyncHandler(async (req, res) => {
   const { orderId, amount } = req.body
-
   const order = await Order.findById(orderId)
-  if (!order) {
-    res.status(404)
-    throw new Error('Order not found')
-  }
+  if (!order) { res.status(404); throw new Error('Order not found') }
 
   const merchantId = process.env.PAYWAY_MERCHANT_ID
   const apiKey = process.env.PAYWAY_API_KEY
   const baseUrl = process.env.PAYWAY_API_URL || 'https://checkout.payway.com.kh'
 
-  if (!merchantId || !apiKey) {
-    res.status(500)
-    throw new Error('PayWay credentials are missing')
-  }
-
   const tranId = orderId.toString().slice(-10) + Date.now().toString().slice(-8)
-
   const now = new Date()
-  const reqTime =
-    now.getUTCFullYear().toString() +
+  const reqTime = now.getUTCFullYear().toString() +
     String(now.getUTCMonth() + 1).padStart(2, '0') +
     String(now.getUTCDate()).padStart(2, '0') +
     String(now.getUTCHours()).padStart(2, '0') +
     String(now.getUTCMinutes()).padStart(2, '0') +
     String(now.getUTCSeconds()).padStart(2, '0')
 
-  const returnUrlEncoded = Buffer.from(
-    `${process.env.CLIENT_URL}/payment/success?orderId=${orderId}`
-  ).toString('base64')
-  const cancelUrlEncoded = Buffer.from(
-    `${process.env.CLIENT_URL}/payment/cancel?orderId=${orderId}`
-  ).toString('base64')
+  const returnUrlEncoded = Buffer.from(`${process.env.CLIENT_URL}/payment/success?orderId=${orderId}`).toString('base64')
+  const cancelUrlEncoded = Buffer.from(`${process.env.CLIENT_URL}/payment/cancel?orderId=${orderId}`).toString('base64')
 
   const paymentData = {
     merchant_id: merchantId,
@@ -223,41 +207,32 @@ const createABAPayment = asyncHandler(async (req, res) => {
   try {
     const response = await axios.post(
       `${baseUrl}/api/payment-gateway/v1/payments/purchase`,
-      paymentData
+      paymentData,
+      { headers: { 'Content-Type': 'application/json' } } // Ensure JSON response
     )
 
-    // 🔥 LOG THE EXACT RESPONSE
-    console.log('👉 PAYWAY RAW RESPONSE:', JSON.stringify(response.data, null, 2))
+    // ✅ If PayWay returns a checkout URL (redirect mode)
+    const checkoutUrl = response.data.checkout_url || `https://checkout.payway.com.kh/checkout/${Buffer.from(JSON.stringify({ tran_id: tranId })).toString('base64')}`;
 
-    const qrString = response.data.qrString
-    const qrImage = response.data.qrImage
-    const checkoutUrl = response.data.checkout_url
-    const statusCode = response.data.status?.code
+    // Save to DB
+    const payment = await Payment.create({
+      order: orderId,
+      user: req.user._id,
+      amount: amount,
+      method: 'ABA_PAYWAY',
+      transactionId: tranId,
+      khqrData: { checkoutUrl: checkoutUrl },
+      status: 'pending',
+    })
 
-    if (statusCode === "00" || statusCode === 0 || qrString) {
-      const payment = await Payment.create({
-        order: orderId,
-        user: req.user._id,
-        amount: amount,
-        method: 'ABA_PAYWAY',
-        transactionId: tranId,
-        khqrData: { qrString: qrString, qrImage: qrImage },
-        status: 'pending',
-      })
+    return res.json({
+      paymentId: payment._id,
+      checkoutUrl: checkoutUrl, // Send this to the frontend!
+      transactionId: tranId,
+      amount: payment.amount,
+      status: payment.status,
+    })
 
-      return res.json({
-        paymentId: payment._id,
-        qrData: qrString || qrImage,
-        qrImage: qrImage,
-        checkoutUrl: checkoutUrl,
-        transactionId: tranId,
-        amount: payment.amount,
-        status: payment.status,
-      })
-    }
-
-    res.status(400)
-    throw new Error('Failed to create ABA payment - No QR returned')
   } catch (error) {
     console.error('ABA PayWay error:', error.response?.data || error.message)
     res.status(500)

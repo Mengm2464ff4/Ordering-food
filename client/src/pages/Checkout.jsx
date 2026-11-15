@@ -90,31 +90,31 @@ const Checkout = () => {
     try {
       const order = await createNewOrder(orderData)
 
-      if (order && paymentMethod === 'KHQR') {
-        // ✅ Call ABA PayWay API
+            if (order && paymentMethod === 'KHQR') {
         const response = await axios.post('/payments/aba-payway', {
           orderId: order._id,
           amount: total,
         })
 
-        // ✅ ABA returns the QR string in `qrData`. No checkoutUrl needed for KHQR.
-        const qrString = response.data.qrData || response.data.qrImage
-
-        if (!qrString) {
-          toast.error('No QR code received from server')
-          setIsSubmitting(false)
-          return
+        // ✅ Redirect to PayWay Checkout URL
+        if (response.data.checkoutUrl) {
+          window.location.href = response.data.checkoutUrl;
+          return;
         }
 
-        setQrData(qrString)
-        setPaymentId(response.data.paymentId)
-        setOrderId(order._id)
-        setFinalTotal(total)
-        setShowQR(true)
-
-        setTimeout(() => {
-          clearCart()
-        }, 1000)
+        // Fallback if QR string is returned
+        const qrString = response.data.qrData || response.data.qrImage
+        if (qrString) {
+          setQrData(qrString)
+          setPaymentId(response.data.paymentId)
+          setOrderId(order._id)
+          setFinalTotal(total)
+          setShowQR(true)
+          setTimeout(() => { clearCart() }, 1000)
+        } else {
+          toast.error('No payment URL received from server')
+          setIsSubmitting(false)
+        }
       } else if (order) {
         clearCart()
         navigate(`/orders/${order._id}`, { state: { success: true } })
