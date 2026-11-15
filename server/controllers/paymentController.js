@@ -1,5 +1,4 @@
-const mongoose = require('mongoose') // ✅ បន្ថែម Import នេះនៅខាងលើ
-
+const mongoose = require('mongoose')
 const axios = require('axios')
 const crypto = require('crypto')
 const Payment = require('../models/Payment')
@@ -7,18 +6,46 @@ const Order = require('../models/Order')
 const { khqrService } = require('../services/khqrService')
 const asyncHandler = require('express-async-handler')
 
-
+// Hash for check-transaction API: concatenate merchant_id + tran_id
 const createABAHash = (data, apiKey) => {
   const sortedKeys = Object.keys(data).sort()
   const str = sortedKeys.map(key => `${key}=${data[key]}`).join('&')
   return crypto.createHmac('sha512', apiKey).update(str).digest('base64')
 }
 
+// ✅ Hash specifically for Purchase API, concatenating in official field order
+const createPurchaseHash = (data, apiKey) => {
+  const b4hash =
+    (data.req_time || '') +
+    (data.merchant_id || '') +
+    (data.tran_id || '') +
+    (data.amount || '') +
+    (data.items || '') +
+    (data.shipping || '') +
+    (data.firstname || '') +
+    (data.lastname || '') +
+    (data.email || '') +
+    (data.phone || '') +
+    (data.type || '') +
+    (data.payment_option || '') +
+    (data.return_url || '') +
+    (data.cancel_url || '') +
+    (data.continue_success_url || '') +
+    (data.return_deeplink || '') +
+    (data.currency || '') +
+    (data.custom_fields || '') +
+    (data.return_params || '') +
+    (data.payout || '') +
+    (data.lifetime || '') +
+    (data.additional_params || '') +
+    (data.google_pay_token || '') +
+    (data.skip_success_page || '')
+
+  return crypto.createHmac('sha512', apiKey).update(b4hash).digest('base64')
+}
+
 // ==================== KHQR PAYMENT ====================
 
-// @desc    Create KHQR payment
-// @route   POST /api/payments/khqr
-// @access  Private
 const createKHQRPayment = asyncHandler(async (req, res) => {
   const { orderId, amount } = req.body
 
@@ -69,33 +96,19 @@ const createKHQRPayment = asyncHandler(async (req, res) => {
   })
 })
 
-// @desc    Verify KHQR payment
-// @route   POST /api/payments/verify
-// @access  Private
-
 const verifyPayment = asyncHandler(async (req, res) => {
   try {
     const { paymentId } = req.body
-    console.log('🔍 1. verifyPayment called with paymentId:', paymentId)
-
-    // ✅ ត្រួតពិនិត្យថាតើ paymentId ជា ObjectId ត្រឹមត្រូវឬអត់
     if (!paymentId || !mongoose.Types.ObjectId.isValid(paymentId)) {
-      console.log('❌ 2. Invalid paymentId format:', paymentId)
       return res.status(400).json({ status: 'error', message: 'Invalid payment ID format' })
     }
 
     const payment = await Payment.findById(paymentId)
-    console.log('🔍 3. Payment found:', payment ? 'Yes' : 'No')
-
     if (!payment) {
-      console.log('❌ 4. Payment not found in database')
       return res.status(404).json({ status: 'error', message: 'Payment not found' })
     }
 
-    console.log('🔍 5. Payment transactionId:', payment.transactionId)
-
     if (payment.transactionId?.startsWith('MOCK_')) {
-      console.log('✅ 6. Mock payment detected, marking as completed')
       payment.status = 'completed'
       payment.paidAt = Date.now()
       await payment.save()
@@ -106,7 +119,6 @@ const verifyPayment = asyncHandler(async (req, res) => {
         order.paidAt = Date.now()
         await order.save()
       }
-
       return res.json({ status: 'success', paid: true })
     }
 
@@ -115,7 +127,6 @@ const verifyPayment = asyncHandler(async (req, res) => {
     const baseUrl = process.env.PAYWAY_API_URL || 'https://checkout-sandbox.payway.com.kh'
 
     if (!merchantId || !apiKey) {
-      console.log('⚠️ 9. ABA credentials missing, returning pending')
       return res.json({ status: 'pending', paid: false })
     }
 
@@ -123,7 +134,6 @@ const verifyPayment = asyncHandler(async (req, res) => {
       merchant_id: merchantId,
       tran_id: payment.transactionId,
     }
-
     statusData.hash = createABAHash(statusData, apiKey)
 
     try {
@@ -132,11 +142,8 @@ const verifyPayment = asyncHandler(async (req, res) => {
         statusData
       )
 
-      console.log('🔍 13. ABA API response:', response.data)
       const { status } = response.data
-
       if (status?.code === 0 || status === 0) {
-        console.log('✅ 14. ABA payment confirmed')
         payment.status = 'completed'
         payment.paidAt = Date.now()
         await payment.save()
@@ -147,25 +154,20 @@ const verifyPayment = asyncHandler(async (req, res) => {
           order.paidAt = Date.now()
           await order.save()
         }
-
         return res.json({ status: 'success', paid: true })
       }
-
       return res.json({ status: 'pending', paid: false })
     } catch (error) {
-      console.error('❌ 16. ABA verify error:', error.response?.data || error.message)
+      console.error('ABA verify error:', error.response?.data || error.message)
       return res.json({ status: 'pending', paid: false })
     }
   } catch (error) {
-    console.error('❌ 17. Outer verifyPayment error:', error)
     return res.status(500).json({ status: 'error', message: error.message })
   }
 })
 
+// ==================== ABA PAYWAY ====================
 
-// @desc    Create ABA PayWay Payment
-// @route   POST /api/payments/aba-payway
-// @access  Private
 const createABAPayment = asyncHandler(async (req, res) => {
   const { orderId, amount } = req.body
 
@@ -177,19 +179,15 @@ const createABAPayment = asyncHandler(async (req, res) => {
 
   if (!process.env.PAYWAY_MERCHANT_ID || !process.env.PAYWAY_API_KEY) {
     const mockQrData = `MOCK_ABA_PAYMENT|Order:${orderId}|Amount:${amount}|Time:${Date.now()}`
-    
     const payment = await Payment.create({
       order: orderId,
       user: req.user._id,
       amount: amount,
       method: 'ABA_PAYWAY',
       transactionId: `MOCK_${Date.now()}`,
-      khqrData: {
-        qrData: mockQrData,
-      },
+      khqrData: { qrData: mockQrData },
       status: 'pending',
     })
-
     return res.json({
       paymentId: payment._id,
       qrData: mockQrData,
@@ -198,10 +196,8 @@ const createABAPayment = asyncHandler(async (req, res) => {
     })
   }
 
-    // ✅ ABA requires tran_id: max 20 chars, alphanumeric only, unique
   const tranId = orderId.toString().slice(-10) + Date.now().toString().slice(-8)
 
-  // ✅ ABA requires req_time in YYYYMMDDHHmmss format
   const reqTime = new Date()
     .toISOString()
     .replace(/[-:T.Z]/g, '')
@@ -211,19 +207,27 @@ const createABAPayment = asyncHandler(async (req, res) => {
   const apiKey = process.env.PAYWAY_API_KEY
   const baseUrl = process.env.PAYWAY_API_URL || 'https://checkout-sandbox.payway.com.kh'
 
+  // ✅ return_url and cancel_url must be Base64-encoded before hashing and sending
+  const returnUrlEncoded = Buffer.from(
+    `${process.env.CLIENT_URL}/payment/success?orderId=${orderId}`
+  ).toString('base64')
+  const cancelUrlEncoded = Buffer.from(
+    `${process.env.CLIENT_URL}/payment/cancel?orderId=${orderId}`
+  ).toString('base64')
+
   const paymentData = {
     merchant_id: merchantId,
     tran_id: tranId,
     amount: parseFloat(amount).toFixed(2),
     currency: 'USD',
-    req_time: reqTime,                         // ✅ was: new Date().toISOString()
-    return_url: `${process.env.CLIENT_URL}/payment/success?orderId=${orderId}`,
-    cancel_url: `${process.env.CLIENT_URL}/payment/cancel?orderId=${orderId}`,
+    req_time: reqTime,
+    return_url: returnUrlEncoded,
+    cancel_url: cancelUrlEncoded,
     continue_success_url: `${process.env.CLIENT_URL}/payment/success?orderId=${orderId}`,
     payment_option: 'abapay_khqr',
   }
 
-  paymentData.hash = createABAHash(paymentData, apiKey)
+  paymentData.hash = createPurchaseHash(paymentData, apiKey)
 
   try {
     const response = await axios.post(
@@ -268,15 +272,11 @@ const createABAPayment = asyncHandler(async (req, res) => {
   }
 })
 
-// @desc    ABA PayWay Callback (Webhook)
-// @route   POST /api/payments/aba-callback
-// @access  Public
 const abaCallback = asyncHandler(async (req, res) => {
   const { tran_id, status, apv } = req.body
 
   try {
     const payment = await Payment.findOne({ transactionId: tran_id })
-
     if (!payment) {
       return res.status(404).json({ message: 'Payment not found' })
     }
@@ -305,17 +305,12 @@ const abaCallback = asyncHandler(async (req, res) => {
   }
 })
 
-// @desc    Get payment status
-// @route   GET /api/payments/:id/status
-// @access  Private
 const getPaymentStatus = asyncHandler(async (req, res) => {
   const payment = await Payment.findById(req.params.id)
-  
   if (!payment) {
     res.status(404)
     throw new Error('Payment not found')
   }
-
   res.json({
     status: payment.status,
     paidAt: payment.paidAt,
@@ -323,9 +318,6 @@ const getPaymentStatus = asyncHandler(async (req, res) => {
   })
 })
 
-// @desc    Get all payments (Admin)
-// @route   GET /api/payments
-// @access  Private/Admin
 const getPayments = asyncHandler(async (req, res) => {
   const page = parseInt(req.query.page) || 1
   const limit = parseInt(req.query.limit) || 10
@@ -350,34 +342,22 @@ const getPayments = asyncHandler(async (req, res) => {
   })
 })
 
-// @desc    Get payment history for user
-// @route   GET /api/payments/history
-// @access  Private
 const getPaymentHistory = asyncHandler(async (req, res) => {
   const payments = await Payment.find({ user: req.user._id })
     .populate('order')
     .sort('-createdAt')
-  
   res.json(payments)
 })
 
-// @desc    Get payment by order ID
-// @route   GET /api/payments/order/:orderId
-// @access  Private
 const getPaymentByOrder = asyncHandler(async (req, res) => {
   const payment = await Payment.findOne({ order: req.params.orderId })
-  
   if (!payment) {
     res.status(404)
     throw new Error('Payment not found for this order')
   }
-
   res.json(payment)
 })
 
-// @desc    Refund payment (Admin)
-// @route   POST /api/payments/:id/refund
-// @access  Private/Admin
 const refundPayment = asyncHandler(async (req, res) => {
   const { reason } = req.body
   const payment = await Payment.findById(req.params.id)
@@ -400,12 +380,11 @@ const refundPayment = asyncHandler(async (req, res) => {
   res.json({ message: 'Payment refunded successfully', payment })
 })
 
-
 module.exports = {
   createKHQRPayment,
   verifyPayment,
-  createABAPayment, 
-  abaCallback,      
+  createABAPayment,
+  abaCallback,
   getPaymentStatus,
   getPayments,
   getPaymentHistory,
