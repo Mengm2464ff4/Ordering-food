@@ -190,20 +190,15 @@ const createABAPayment = asyncHandler(async (req, res) => {
   const tranId = orderId.toString().slice(-10) + Date.now().toString().slice(-8)
 
   try {
-    // ✅ Format amount correctly to 2 decimals
     const formattedAmount = Math.round(parseFloat(amount) * 100) / 100
- // 👇 ADD THESE TWO LINES HERE 👇
-    // Calculate expiration time (e.g., 15 minutes from now)
     const expirationTimestamp = Date.now() + 15 * 60 * 1000 
-    // 👆 ADD THESE TWO LINES HERE 👆
-    // ✅ The SDK requires optionalData to be passed exactly like this
+
+    // ✅ Removed storeLabel and terminalLabel to prevent "Account Not Found" errors
     const optionalData = {
       currency: khqrData.currency.usd,
       amount: formattedAmount,
       billNumber: tranId,
-      storeLabel: merchantName,
-      terminalLabel: 'Online',
-       expirationTimestamp: expirationTimestamp // ✅ ADD THIS LINE
+      expirationTimestamp: expirationTimestamp
     }
 
     const individualInfo = new IndividualInfo(
@@ -216,7 +211,6 @@ const createABAPayment = asyncHandler(async (req, res) => {
     const khqr = new BakongKHQR()
     const qrResponse = khqr.generateIndividual(individualInfo)
 
-    // ✅ Log response just in case it fails
     if (!qrResponse || qrResponse.status?.code !== 0) {
       console.log('Bakong SDK Error:', qrResponse)
       throw new Error(qrResponse?.status?.message || 'SDK failed to generate QR')
