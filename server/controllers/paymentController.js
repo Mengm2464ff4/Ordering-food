@@ -192,7 +192,10 @@ const createABAPayment = asyncHandler(async (req, res) => {
   try {
     // ✅ Format amount correctly to 2 decimals
     const formattedAmount = Math.round(parseFloat(amount) * 100) / 100
-
+ // 👇 ADD THESE TWO LINES HERE 👇
+    // Calculate expiration time (e.g., 15 minutes from now)
+    const expirationTimestamp = Date.now() + 15 * 60 * 1000 
+    // 👆 ADD THESE TWO LINES HERE 👆
     // ✅ The SDK requires optionalData to be passed exactly like this
     const optionalData = {
       currency: khqrData.currency.usd,
@@ -200,6 +203,7 @@ const createABAPayment = asyncHandler(async (req, res) => {
       billNumber: tranId,
       storeLabel: merchantName,
       terminalLabel: 'Online',
+       expirationTimestamp: expirationTimestamp // ✅ ADD THIS LINE
     }
 
     const individualInfo = new IndividualInfo(
