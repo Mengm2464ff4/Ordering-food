@@ -5,7 +5,6 @@ const Payment = require('../models/Payment')
 const Order = require('../models/Order')
 const { khqrService } = require('../services/khqrService')
 const asyncHandler = require('express-async-handler')
-const { KHQR } = require('bakong-khqr-npm')
 
 // Hash for check-transaction API: concatenate merchant_id + tran_id
 const createABAHash = (data, apiKey) => {
@@ -180,7 +179,9 @@ const createABAPayment = asyncHandler(async (req, res) => {
   }
 
   const bakongToken = process.env.BAKONG_API_TOKEN
-  const bakongAccount = process.env.BAKONG_ACCOUNT_ID // For example: vutha@aba
+  const bakongAccount = process.env.BAKONG_ACCOUNT_ID
+  const merchantName = process.env.BAKONG_MERCHANT_NAME || 'Vuthy Vutha'
+  const merchantCity = process.env.BAKONG_MERCHANT_CITY || 'Phnom Penh'
 
   if (!bakongToken || !bakongAccount) {
     res.status(500)
@@ -190,16 +191,32 @@ const createABAPayment = asyncHandler(async (req, res) => {
   const tranId = orderId.toString().slice(-10) + Date.now().toString().slice(-8)
 
   try {
-    // ✅ Correct approach: Generate QR string locally using SDK, no API call needed
-    const khqr = new KHQR(bakongToken)
-    const qrString = khqr.create_qr({
-      bank_account: bakongAccount,
-      merchant_name: process.env.BAKONG_MERCHANT_NAME || 'Vuthy Vutha',
-      merchant_city: process.env.BAKONG_MERCHANT_CITY || 'Phnom Penh',
+    // ✅ Correct way to initialize Bakong KHQR
+    const { BakongKHQR, khqrData, IndividualInfo } = require('bakong-khqr')
+    
+    const optionalData = {
+      currency: khqrData.currency.usd,
       amount: parseFloat(amount),
-      currency: 'USD',
-      bill_number: tranId,
-    })
+      billNumber: tranId,
+      storeLabel: merchantName,
+      terminalLabel: 'Online',
+    }
+
+    const individualInfo = new IndividualInfo(
+      bakongAccount,
+      merchantName,
+      merchantCity,
+      optionalData
+    )
+
+    const khqr = new BakongKHQR()
+    const qrData = khqr.generateIndividual(individualInfo)
+
+    if (!qrData || !qrData.data || !qrData.data.qr) {
+      throw new Error('Failed to generate QR data')
+    }
+
+    const qrString = qrData.data.qr
 
     // Save to database
     const payment = await Payment.create({
