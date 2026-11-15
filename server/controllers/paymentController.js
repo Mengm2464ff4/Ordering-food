@@ -5,6 +5,7 @@ const Payment = require('../models/Payment')
 const Order = require('../models/Order')
 const { khqrService } = require('../services/khqrService')
 const asyncHandler = require('express-async-handler')
+const { KHQR } = require('bakong-khqr-npm')
 
 // Hash for check-transaction API: concatenate merchant_id + tran_id
 const createABAHash = (data, apiKey) => {
@@ -168,6 +169,7 @@ const verifyPayment = asyncHandler(async (req, res) => {
 
 // ==================== ABA PAYWAY ====================
 
+
 const createABAPayment = asyncHandler(async (req, res) => {
   const { orderId, amount } = req.body
 
@@ -178,58 +180,38 @@ const createABAPayment = asyncHandler(async (req, res) => {
   }
 
   const bakongToken = process.env.BAKONG_API_TOKEN
-  const bakongAccount = process.env.BAKONG_ACCOUNT_ID || '0963193606@abaa' 
-  const merchantName = process.env.BAKONG_MERCHANT_NAME || 'Vuthy Vutha'
-  const merchantCity = process.env.BAKONG_MERCHANT_CITY || 'Phnom Penh'
+  const bakongAccount = process.env.BAKONG_ACCOUNT_ID // For example: vutha@aba
 
-  if (!bakongToken) {
+  if (!bakongToken || !bakongAccount) {
     res.status(500)
-    throw new Error('Bakong API Token is missing')
+    throw new Error('Bakong credentials are missing')
   }
 
   const tranId = orderId.toString().slice(-10) + Date.now().toString().slice(-8)
 
   try {
-    // 1. Generate QR string using Bakong API
-    const qrResponse = await axios.post(
-      'https://api-bakong.nbc.gov.kh/v1/generate_qr',
-      {
-        bakongAccountID: bakongAccount,
-        merchantName: merchantName,
-        merchantCity: merchantCity,
-        amount: parseFloat(amount).toFixed(2),
-        currency: 'USD',
-        billNumber: tranId,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${bakongToken}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    )
+    // ✅ Correct approach: Generate QR string locally using SDK, no API call needed
+    const khqr = new KHQR(bakongToken)
+    const qrString = khqr.create_qr({
+      bank_account: bakongAccount,
+      merchant_name: process.env.BAKONG_MERCHANT_NAME || 'Vuthy Vutha',
+      merchant_city: process.env.BAKONG_MERCHANT_CITY || 'Phnom Penh',
+      amount: parseFloat(amount),
+      currency: 'USD',
+      bill_number: tranId,
+    })
 
-    // 2. Extract the QR string
-    const qrString = qrResponse.data?.data?.qr
-
-    if (!qrString) {
-      throw new Error('No QR code received from Bakong')
-    }
-
-    // 3. Save to database
+    // Save to database
     const payment = await Payment.create({
       order: orderId,
       user: req.user._id,
       amount: amount,
-      method: 'ABA_PAYWAY', // You can change this to 'Bakong' if you want
+      method: 'ABA_PAYWAY',
       transactionId: tranId,
-      khqrData: {
-        qrString: qrString,
-      },
+      khqrData: { qrString: qrString },
       status: 'pending',
     })
 
-    // 4. Return to frontend
     return res.json({
       paymentId: payment._id,
       qrData: qrString,
@@ -238,9 +220,9 @@ const createABAPayment = asyncHandler(async (req, res) => {
       status: payment.status,
     })
   } catch (error) {
-    console.error('Bakong API error:', error.response?.data || error.message)
+    console.error('Bakong QR generation error:', error.message)
     res.status(500)
-    throw new Error(error.response?.data?.responseMessage || 'Failed to create Bakong QR code')
+    throw new Error('Failed to generate Bakong QR code')
   }
 })
 
