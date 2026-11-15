@@ -178,68 +178,87 @@ const createABAPayment = asyncHandler(async (req, res) => {
     throw new Error('Order not found')
   }
 
-  const bakongAccount = process.env.BAKONG_ACCOUNT_ID
-  const merchantName = process.env.BAKONG_MERCHANT_NAME || 'Vuthy Vutha'
-  const merchantCity = process.env.BAKONG_MERCHANT_CITY || 'Phnom Penh'
+  const merchantId = process.env.PAYWAY_MERCHANT_ID
+  const apiKey = process.env.PAYWAY_API_KEY
+  const baseUrl = process.env.PAYWAY_API_URL || 'https://checkout.payway.com.kh' // Changed to production
 
-  if (!bakongAccount) {
+  if (!merchantId || !apiKey) {
     res.status(500)
-    throw new Error('Bakong credentials are missing')
+    throw new Error('PayWay credentials are missing')
   }
 
   const tranId = orderId.toString().slice(-10) + Date.now().toString().slice(-8)
 
+  const now = new Date()
+  const reqTime =
+    now.getUTCFullYear().toString() +
+    String(now.getUTCMonth() + 1).padStart(2, '0') +
+    String(now.getUTCDate()).padStart(2, '0') +
+    String(now.getUTCHours()).padStart(2, '0') +
+    String(now.getUTCMinutes()).padStart(2, '0') +
+    String(now.getUTCSeconds()).padStart(2, '0')
+
+  const returnUrlEncoded = Buffer.from(
+    `${process.env.CLIENT_URL}/payment/success?orderId=${orderId}`
+  ).toString('base64')
+  const cancelUrlEncoded = Buffer.from(
+    `${process.env.CLIENT_URL}/payment/cancel?orderId=${orderId}`
+  ).toString('base64')
+
+  const paymentData = {
+    merchant_id: merchantId,
+    tran_id: tranId,
+    amount: parseFloat(amount).toFixed(2),
+    currency: 'USD',
+    req_time: reqTime,
+    type: 'purchase',
+    return_url: returnUrlEncoded,
+    cancel_url: cancelUrlEncoded,
+    continue_success_url: `${process.env.CLIENT_URL}/payment/success?orderId=${orderId}`,
+    payment_option: 'abapay_khqr',
+  }
+
+  paymentData.hash = createPurchaseHash(paymentData, apiKey)
+
   try {
-    const formattedAmount = Math.round(parseFloat(amount) * 100) / 100
-    const expirationTimestamp = Date.now() + 15 * 60 * 1000 
-
-    // ✅ Removed storeLabel and terminalLabel to prevent "Account Not Found" errors
-    const optionalData = {
-      currency: khqrData.currency.usd,
-      amount: formattedAmount,
-      billNumber: tranId,
-      expirationTimestamp: expirationTimestamp
-    }
-
-    const individualInfo = new IndividualInfo(
-      bakongAccount,
-      merchantName,
-      merchantCity,
-      optionalData
+    const response = await axios.post(
+      `${baseUrl}/api/payment-gateway/v1/payments/purchase`,
+      paymentData
     )
 
-    const khqr = new BakongKHQR()
-    const qrResponse = khqr.generateIndividual(individualInfo)
+    const qrString = response.data.qrString
+    const qrImage = response.data.qrImage
+    const checkoutUrl = response.data.checkout_url
+    const statusCode = response.data.status?.code
 
-    if (!qrResponse || qrResponse.status?.code !== 0) {
-      console.log('Bakong SDK Error:', qrResponse)
-      throw new Error(qrResponse?.status?.message || 'SDK failed to generate QR')
+    if (statusCode === "00" || statusCode === 0 || qrString) {
+      const payment = await Payment.create({
+        order: orderId,
+        user: req.user._id,
+        amount: amount,
+        method: 'ABA_PAYWAY',
+        transactionId: tranId,
+        khqrData: { qrString: qrString, qrImage: qrImage },
+        status: 'pending',
+      })
+
+      return res.json({
+        paymentId: payment._id,
+        qrData: qrString || qrImage,
+        qrImage: qrImage,
+        checkoutUrl: checkoutUrl,
+        transactionId: tranId,
+        amount: payment.amount,
+        status: payment.status,
+      })
     }
 
-    const qrString = qrResponse.data.qr
-
-    // Save to database
-    const payment = await Payment.create({
-      order: orderId,
-      user: req.user._id,
-      amount: amount,
-      method: 'ABA_PAYWAY',
-      transactionId: tranId,
-      khqrData: { qrString: qrString },
-      status: 'pending',
-    })
-
-    return res.json({
-      paymentId: payment._id,
-      qrData: qrString,
-      transactionId: tranId,
-      amount: payment.amount,
-      status: payment.status,
-    })
+    res.status(400)
+    throw new Error('Failed to create ABA payment - No QR returned')
   } catch (error) {
-    console.error('Bakong QR generation error:', error.message)
+    console.error('ABA PayWay error:', error.response?.data || error.message)
     res.status(500)
-    throw new Error('Failed to generate Bakong QR code')
+    throw new Error(error.response?.data?.status?.message || 'Failed to create QR code')
   }
 })
 
