@@ -241,16 +241,14 @@ const createABAPayment = asyncHandler(async (req, res) => {
       paymentData
     )
 
-    // 🔥 Print the exact response from ABA to the logs
-    console.log('🔥 ABA REAL RESPONSE:', JSON.stringify(response.data, null, 2))
+    // ✅ Grab the data directly from the root of the response
+    const qrString = response.data.qrString
+    const qrImage = response.data.qrImage
+    const checkoutUrl = response.data.checkout_url
+    const statusCode = response.data.status?.code
 
-    // ✅ Extract the data safely (ABA often puts it inside response.data.data)
-    const abData = response.data?.data || response.data || {}
-    const qrString = abData.qr_string || response.data?.qr_string
-    const qrImage = abData.qr_image || response.data?.qr_image
-    const checkoutUrl = abData.checkout_url || response.data?.checkout_url
-
-    if (qrString || qrImage || checkoutUrl) {
+    // ✅ Check for "00" (string) OR 0 (number)
+    if (statusCode === "00" || statusCode === 0 || qrString) {
       const payment = await Payment.create({
         order: orderId,
         user: req.user._id,

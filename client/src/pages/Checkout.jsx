@@ -71,42 +71,42 @@ const Checkout = () => {
       image: item.image,
     }))
 
-   const orderData = {
-  orderItems,
-  shippingAddress: {
-    street: data.street || 'N/A',
-    city: data.city || 'N/A',
-    district: data.district || 'N/A', // ✅ បំពេញដោយ 'N/A' ប្រសិនបើទទេ
-    commune: data.commune || 'N/A',
-    phone: data.phone || 'N/A',
-  },
-  paymentMethod,
-  itemsPrice: subtotal,
-  taxPrice: tax,
-  deliveryPrice: deliveryFee,
-  totalPrice: total,
-}
+    const orderData = {
+      orderItems,
+      shippingAddress: {
+        street: data.street || 'N/A',
+        city: data.city || 'N/A',
+        district: data.district || 'N/A',
+        commune: data.commune || 'N/A',
+        phone: data.phone || 'N/A',
+      },
+      paymentMethod,
+      itemsPrice: subtotal,
+      taxPrice: tax,
+      deliveryPrice: deliveryFee,
+      totalPrice: total,
+    }
 
-    const order = await createNewOrder(orderData)
+    try {
+      const order = await createNewOrder(orderData)
 
-    if (order && paymentMethod === 'KHQR') {
-      try {
-        // ✅ ហៅ API ទៅកាន់ ABA PayWay
+      if (order && paymentMethod === 'KHQR') {
+        // ✅ Call ABA PayWay API
         const response = await axios.post('/payments/aba-payway', {
           orderId: order._id,
           amount: total,
         })
 
-        const { qrData, checkoutUrl, qrImage } = response.data
+        // ✅ ABA returns the QR string in `qrData`. No checkoutUrl needed for KHQR.
+        const qrString = response.data.qrData || response.data.qrImage
 
-        // ✅ ប្រសិនបើមាន checkoutUrl (សម្រាប់ ABA PayWay ពិតប្រាកដ)
-        if (checkoutUrl) {
-          window.location.href = checkoutUrl
+        if (!qrString) {
+          toast.error('No QR code received from server')
+          setIsSubmitting(false)
           return
         }
 
-        // ✅ ប្រសិនបើមាន qrData ឬ qrImage (សម្រាប់ QR Code)
-        setQrData(qrData || qrImage)
+        setQrData(qrString)
         setPaymentId(response.data.paymentId)
         setOrderId(order._id)
         setFinalTotal(total)
@@ -115,12 +115,13 @@ const Checkout = () => {
         setTimeout(() => {
           clearCart()
         }, 1000)
-      } catch (error) {
-        toast.error('Failed to create QR code')
+      } else if (order) {
+        clearCart()
+        navigate(`/orders/${order._id}`, { state: { success: true } })
       }
-    } else if (order) {
-      clearCart()
-      navigate(`/orders/${order._id}`, { state: { success: true } })
+    } catch (error) {
+      console.error(error)
+      toast.error(error.response?.data?.message || 'Failed to create QR code')
     }
 
     setIsSubmitting(false)
