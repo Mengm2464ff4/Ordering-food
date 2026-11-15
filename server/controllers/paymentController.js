@@ -176,8 +176,10 @@ const createABAPayment = asyncHandler(async (req, res) => {
     throw new Error('Order not found') 
   }
 
-  // ✅ Use your Bakong Account (The one you said worked in your old project)
-  const bakongAccount = process.env.BAKONG_ACCOUNT_ID || '0963193606@abaa'
+  // ✅ Use ABA's shared merchant ID
+  const bakongAccount = 'abaakhppxxx@abaa' 
+  
+  // ✅ Use your merchant name
   const merchantName = process.env.BAKONG_MERCHANT_NAME || 'VUTHY VUTHA'
   const merchantCity = process.env.BAKONG_MERCHANT_CITY || 'Phnom Penh'
 
@@ -188,12 +190,13 @@ const createABAPayment = asyncHandler(async (req, res) => {
   try {
     const { BakongKHQR, khqrData, IndividualInfo } = require('bakong-khqr')
     
-    // ✅ Generate the QR data locally
     const optionalData = {
       currency: khqrData.currency.usd,
       amount: formattedAmount,
       billNumber: tranId,
-      expirationTimestamp: expirationTimestamp
+      expirationTimestamp: expirationTimestamp,
+      // ✅ Pass your actual merchant ID here so it traces back to your account
+      storeLabel: process.env.PAYWAY_MERCHANT_ID || 'ec478717', 
     }
 
     const individualInfo = new IndividualInfo(
@@ -224,7 +227,6 @@ const createABAPayment = asyncHandler(async (req, res) => {
       status: 'pending',
     })
 
-    // ✅ Return the QR string to the frontend so it displays the QR image
     return res.json({
       paymentId: payment._id,
       qrData: qrString, 
