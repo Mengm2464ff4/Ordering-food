@@ -198,7 +198,15 @@ const createABAPayment = asyncHandler(async (req, res) => {
     })
   }
 
-  const tranId = `ORDER_${orderId}_${Date.now()}`
+    // ✅ ABA requires tran_id: max 20 chars, alphanumeric only, unique
+  const tranId = orderId.toString().slice(-10) + Date.now().toString().slice(-8)
+
+  // ✅ ABA requires req_time in YYYYMMDDHHmmss format
+  const reqTime = new Date()
+    .toISOString()
+    .replace(/[-:T.Z]/g, '')
+    .slice(0, 14)
+
   const merchantId = process.env.PAYWAY_MERCHANT_ID
   const apiKey = process.env.PAYWAY_API_KEY
   const baseUrl = process.env.PAYWAY_API_URL || 'https://checkout-sandbox.payway.com.kh'
@@ -208,7 +216,7 @@ const createABAPayment = asyncHandler(async (req, res) => {
     tran_id: tranId,
     amount: parseFloat(amount).toFixed(2),
     currency: 'USD',
-    req_time: new Date().toISOString(),
+    req_time: reqTime,                         // ✅ was: new Date().toISOString()
     return_url: `${process.env.CLIENT_URL}/payment/success?orderId=${orderId}`,
     cancel_url: `${process.env.CLIENT_URL}/payment/cancel?orderId=${orderId}`,
     continue_success_url: `${process.env.CLIENT_URL}/payment/success?orderId=${orderId}`,
