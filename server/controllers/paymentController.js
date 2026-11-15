@@ -5,6 +5,7 @@ const Payment = require('../models/Payment')
 const Order = require('../models/Order')
 const { khqrService } = require('../services/khqrService')
 const asyncHandler = require('express-async-handler')
+const { BakongKHQR, khqrData, IndividualInfo } = require('bakong-khqr')
 
 // Hash for check-transaction API: concatenate merchant_id + tran_id
 const createABAHash = (data, apiKey) => {
@@ -13,7 +14,7 @@ const createABAHash = (data, apiKey) => {
   return crypto.createHmac('sha512', apiKey).update(str).digest('base64')
 }
 
-// ✅ Hash specifically for Purchase API, concatenating in official field order
+// Hash specifically for Purchase API
 const createPurchaseHash = (data, apiKey) => {
   const b4hash =
     (data.req_time || '') +
@@ -66,9 +67,9 @@ const createKHQRPayment = asyncHandler(async (req, res) => {
     })
   }
 
-  let khqrData
+  let khqrDataRes
   try {
-    khqrData = await khqrService.generateQR({
+    khqrDataRes = await khqrService.generateQR({
       amount: amount,
       orderId: orderId,
       description: `Order ${String(orderId).slice(-8)}`,
@@ -83,14 +84,14 @@ const createKHQRPayment = asyncHandler(async (req, res) => {
     user: req.user._id,
     amount: amount,
     method: 'KHQR',
-    khqrData: khqrData,
+    khqrData: khqrDataRes,
     status: 'pending',
   })
 
   res.json({
     paymentId: payment._id,
-    qrData: khqrData.qrData,
-    md5: khqrData.md5,
+    qrData: khqrDataRes.qrData,
+    md5: khqrDataRes.md5,
     amount: payment.amount,
     status: payment.status,
   })
@@ -143,7 +144,7 @@ const verifyPayment = asyncHandler(async (req, res) => {
       )
 
       const { status } = response.data
-      if (status?.code === 0 || status === 0) {
+      if (status?.code === 0 || status === 0 || status?.code === "00") {
         payment.status = 'completed'
         payment.paidAt = Date.now()
         await payment.save()
@@ -166,8 +167,7 @@ const verifyPayment = asyncHandler(async (req, res) => {
   }
 })
 
-// ==================== ABA PAYWAY ====================
-
+// ==================== ABA PAYWAY / BAKONG ====================
 
 const createABAPayment = asyncHandler(async (req, res) => {
   const { orderId, amount } = req.body
@@ -178,12 +178,11 @@ const createABAPayment = asyncHandler(async (req, res) => {
     throw new Error('Order not found')
   }
 
-  const bakongToken = process.env.BAKONG_API_TOKEN
   const bakongAccount = process.env.BAKONG_ACCOUNT_ID
   const merchantName = process.env.BAKONG_MERCHANT_NAME || 'Vuthy Vutha'
   const merchantCity = process.env.BAKONG_MERCHANT_CITY || 'Phnom Penh'
 
-  if (!bakongToken || !bakongAccount) {
+  if (!bakongAccount) {
     res.status(500)
     throw new Error('Bakong credentials are missing')
   }
@@ -191,12 +190,13 @@ const createABAPayment = asyncHandler(async (req, res) => {
   const tranId = orderId.toString().slice(-10) + Date.now().toString().slice(-8)
 
   try {
-    // ✅ Correct way to initialize Bakong KHQR
-    const { BakongKHQR, khqrData, IndividualInfo } = require('bakong-khqr')
-    
+    // ✅ Format amount correctly to 2 decimals
+    const formattedAmount = Math.round(parseFloat(amount) * 100) / 100
+
+    // ✅ The SDK requires optionalData to be passed exactly like this
     const optionalData = {
       currency: khqrData.currency.usd,
-      amount: parseFloat(amount),
+      amount: formattedAmount,
       billNumber: tranId,
       storeLabel: merchantName,
       terminalLabel: 'Online',
@@ -210,13 +210,15 @@ const createABAPayment = asyncHandler(async (req, res) => {
     )
 
     const khqr = new BakongKHQR()
-    const qrData = khqr.generateIndividual(individualInfo)
+    const qrResponse = khqr.generateIndividual(individualInfo)
 
-    if (!qrData || !qrData.data || !qrData.data.qr) {
-      throw new Error('Failed to generate QR data')
+    // ✅ Log response just in case it fails
+    if (!qrResponse || qrResponse.status?.code !== 0) {
+      console.log('Bakong SDK Error:', qrResponse)
+      throw new Error(qrResponse?.status?.message || 'SDK failed to generate QR')
     }
 
-    const qrString = qrData.data.qr
+    const qrString = qrResponse.data.qr
 
     // Save to database
     const payment = await Payment.create({
