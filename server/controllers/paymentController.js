@@ -226,24 +226,31 @@ const createABAPayment = asyncHandler(async (req, res) => {
     amount: parseFloat(amount).toFixed(2),
     currency: 'USD',
     req_time: reqTime,
+    type: 'purchase',
     return_url: returnUrlEncoded,
     cancel_url: cancelUrlEncoded,
     continue_success_url: `${process.env.CLIENT_URL}/payment/success?orderId=${orderId}`,
     payment_option: 'abapay_khqr',
-    lifetime: 30
   }
 
   paymentData.hash = createPurchaseHash(paymentData, apiKey)
 
-  try {
+     try {
     const response = await axios.post(
       `${baseUrl}/api/payment-gateway/v1/payments/purchase`,
       paymentData
     )
 
-    const { checkout_url, qr_string, qr_image, status } = response.data
+    // 🔥 Print the exact response from ABA to the logs
+    console.log('🔥 ABA REAL RESPONSE:', JSON.stringify(response.data, null, 2))
 
-    if (status?.code === 0 || checkout_url || qr_string) {
+    // ✅ Extract the data safely (ABA often puts it inside response.data.data)
+    const abData = response.data?.data || response.data || {}
+    const qrString = abData.qr_string || response.data?.qr_string
+    const qrImage = abData.qr_image || response.data?.qr_image
+    const checkoutUrl = abData.checkout_url || response.data?.checkout_url
+
+    if (qrString || qrImage || checkoutUrl) {
       const payment = await Payment.create({
         order: orderId,
         user: req.user._id,
@@ -251,18 +258,18 @@ const createABAPayment = asyncHandler(async (req, res) => {
         method: 'ABA_PAYWAY',
         transactionId: tranId,
         khqrData: {
-          qrString: qr_string,
-          qrImage: qr_image,
-          checkoutUrl: checkout_url,
+          qrString: qrString,
+          qrImage: qrImage,
+          checkoutUrl: checkoutUrl,
         },
         status: 'pending',
       })
 
       return res.json({
         paymentId: payment._id,
-        qrData: qr_string || qr_image,
-        qrImage: qr_image,
-        checkoutUrl: checkout_url,
+        qrData: qrString || qrImage,
+        qrImage: qrImage,
+        checkoutUrl: checkoutUrl,
         transactionId: tranId,
         amount: payment.amount,
         status: payment.status,
@@ -270,7 +277,7 @@ const createABAPayment = asyncHandler(async (req, res) => {
     }
 
     res.status(400)
-    throw new Error('Failed to create ABA payment')
+    throw new Error('Failed to create ABA payment - No QR returned')
   } catch (error) {
     console.error('ABA PayWay error:', error.response?.data || error.message)
     res.status(500)
