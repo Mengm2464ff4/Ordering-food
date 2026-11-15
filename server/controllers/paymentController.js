@@ -196,12 +196,17 @@ const createABAPayment = asyncHandler(async (req, res) => {
     })
   }
 
-  const tranId = orderId.toString().slice(-10) + Date.now().toString().slice(-8)
+   const tranId = orderId.toString().slice(-10) + Date.now().toString().slice(-8)
 
-  const reqTime = new Date()
-    .toISOString()
-    .replace(/[-:T.Z]/g, '')
-    .slice(0, 14)
+  // ✅ Use UTC time, format YYYYMMDDHHmmss
+  const now = new Date()
+  const reqTime =
+    now.getUTCFullYear().toString() +
+    String(now.getUTCMonth() + 1).padStart(2, '0') +
+    String(now.getUTCDate()).padStart(2, '0') +
+    String(now.getUTCHours()).padStart(2, '0') +
+    String(now.getUTCMinutes()).padStart(2, '0') +
+    String(now.getUTCSeconds()).padStart(2, '0')
 
   const merchantId = process.env.PAYWAY_MERCHANT_ID
   const apiKey = process.env.PAYWAY_API_KEY
@@ -225,6 +230,7 @@ const createABAPayment = asyncHandler(async (req, res) => {
     cancel_url: cancelUrlEncoded,
     continue_success_url: `${process.env.CLIENT_URL}/payment/success?orderId=${orderId}`,
     payment_option: 'abapay_khqr',
+    lifetime: 30
   }
 
   paymentData.hash = createPurchaseHash(paymentData, apiKey)
