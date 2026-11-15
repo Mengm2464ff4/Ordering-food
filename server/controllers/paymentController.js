@@ -19,7 +19,6 @@ const createKHQRPayment = asyncHandler(async (req, res) => {
     throw new Error('Order not found')
   }
 
-  // Check if payment already exists
   const existingPayment = await Payment.findOne({ order: orderId, status: 'pending' })
   if (existingPayment) {
     return res.json({
@@ -31,7 +30,6 @@ const createKHQRPayment = asyncHandler(async (req, res) => {
     })
   }
 
-  // Generate KHQR code
   let khqrData
   try {
     khqrData = await khqrService.generateQR({
@@ -67,49 +65,78 @@ const createKHQRPayment = asyncHandler(async (req, res) => {
 // @access  Private
 const verifyPayment = asyncHandler(async (req, res) => {
   const { paymentId } = req.body
-
   const payment = await Payment.findById(paymentId)
+  
   if (!payment) {
     res.status(404)
     throw new Error('Payment not found')
   }
 
-  const md5Hash = payment.khqrData?.md5
-  if (!md5Hash) {
-    res.status(400)
-    throw new Error('No MD5 hash found for this payment')
-  }
-
-  const verification = await khqrService.verifyPayment(
-    payment.khqrData?.transactionId,
-    md5Hash
-  )
-
-  if (verification.status === 'completed') {
+  if (payment.transactionId?.startsWith('MOCK_')) {
     payment.status = 'completed'
-    payment.transactionId = verification.transactionId
     payment.paidAt = Date.now()
     await payment.save()
 
     const order = await Order.findById(payment.order)
-    order.isPaid = true
-    order.paidAt = Date.now()
-    await order.save()
+    if (order) {
+      order.isPaid = true
+      order.paidAt = Date.now()
+      await order.save()
+    }
 
-    res.json({ status: 'success', message: 'Payment verified successfully', paid: true })
-  } else {
-    res.json({ status: 'pending', message: 'Payment pending', paid: false })
+    return res.json({ status: 'success', paid: true })
+  }
+
+  const merchantId = process.env.PAYWAY_MERCHANT_ID
+  const apiKey = process.env.PAYWAY_API_KEY
+  const baseUrl = process.env.PAYWAY_API_URL || 'https://checkout-sandbox.payway.com.kh'
+
+  if (!merchantId || !apiKey) {
+    return res.json({ status: 'pending', paid: false })
+  }
+
+  const statusData = {
+    merchant_id: merchantId,
+    tran_id: payment.transactionId,
+  }
+
+  statusData.hash = createABAHash(statusData, apiKey)
+
+  try {
+    const response = await axios.post(
+      `${baseUrl}/api/payment-gateway/v1/payments/check-transaction`,
+      statusData
+    )
+
+    const { status } = response.data
+
+    if (status?.code === 0 || status === 0) {
+      payment.status = 'completed'
+      payment.paidAt = Date.now()
+      await payment.save()
+
+      const order = await Order.findById(payment.order)
+      if (order) {
+        order.isPaid = true
+        order.paidAt = Date.now()
+        await order.save()
+      }
+
+      return res.json({ status: 'success', paid: true })
+    }
+
+    return res.json({ status: 'pending', paid: false })
+  } catch (error) {
+    console.error('ABA verify error:', error.response?.data || error.message)
+    return res.json({ status: 'pending', paid: false })
   }
 })
 
 // ==================== ABA PAYWAY PAYMENT ====================
 
 const createABAHash = (data, apiKey) => {
-  // តម្រៀប Key តាមអក្សរ
   const sortedKeys = Object.keys(data).sort()
-  // បង្កើត String សម្រាប់ Hash
   const str = sortedKeys.map(key => `${key}=${data[key]}`).join('&')
-  // បង្កើត HMAC SHA512
   return crypto.createHmac('sha512', apiKey).update(str).digest('base64')
 }
 
@@ -125,10 +152,36 @@ const createABAPayment = asyncHandler(async (req, res) => {
     throw new Error('Order not found')
   }
 
+  if (!process.env.PAYWAY_MERCHANT_ID || !process.env.PAYWAY_API_KEY) {
+    const mockQrData = `MOCK_ABA_PAYMENT|Order:${orderId}|Amount:${amount}|Time:${Date.now()}`
+    
+    const payment = await Payment.create({
+      order: orderId,
+      user: req.user._id,
+      amount: amount,
+      method: 'ABA_PAYWAY',
+      transactionId: `MOCK_${Date.now()}`,
+      khqrData: {
+        qrData: mockQrData,
+      },
+      status: 'pending',
+    })
+
+    return res.json({
+      paymentId: payment._id,
+      qrData: mockQrData,
+      amount: payment.amount,
+      status: payment.status,
+    })
+  }
+
   const tranId = `ORDER_${orderId}_${Date.now()}`
+  const merchantId = process.env.PAYWAY_MERCHANT_ID
+  const apiKey = process.env.PAYWAY_API_KEY
+  const baseUrl = process.env.PAYWAY_API_URL || 'https://checkout-sandbox.payway.com.kh'
 
   const paymentData = {
-    merchant_id: process.env.ABA_MERCHANT_ID,
+    merchant_id: merchantId,
     tran_id: tranId,
     amount: parseFloat(amount).toFixed(2),
     currency: 'USD',
@@ -136,50 +189,51 @@ const createABAPayment = asyncHandler(async (req, res) => {
     return_url: `${process.env.CLIENT_URL}/payment/success?orderId=${orderId}`,
     cancel_url: `${process.env.CLIENT_URL}/payment/cancel?orderId=${orderId}`,
     continue_success_url: `${process.env.CLIENT_URL}/payment/success?orderId=${orderId}`,
-    payment_option: 'abapay',
+    payment_option: 'abapay_khqr',
   }
 
-  // បន្ថែម Hash
-  paymentData.hash = createABAHash(paymentData, process.env.ABA_API_KEY)
+  paymentData.hash = createABAHash(paymentData, apiKey)
 
   try {
-    // ហៅ API ទៅ ABA PayWay
     const response = await axios.post(
-      'https://checkout.payway.com.kh/api/payment-gateway/v1/payments/purchase',
-      paymentData,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
+      `${baseUrl}/api/payment-gateway/v1/payments/purchase`,
+      paymentData
     )
 
-    const { checkout_url, status } = response.data
+    const { checkout_url, qr_string, qr_image, status } = response.data
 
-    if (status?.code === 0 || checkout_url) {
-      // រក្សាទុក Payment ក្នុង Database
-      await Payment.create({
+    if (status?.code === 0 || checkout_url || qr_string) {
+      const payment = await Payment.create({
         order: orderId,
         user: req.user._id,
         amount: amount,
         method: 'ABA_PAYWAY',
         transactionId: tranId,
+        khqrData: {
+          qrString: qr_string,
+          qrImage: qr_image,
+          checkoutUrl: checkout_url,
+        },
         status: 'pending',
       })
 
-      res.json({
-        success: true,
+      return res.json({
+        paymentId: payment._id,
+        qrData: qr_string || qr_image,
+        qrImage: qr_image,
         checkoutUrl: checkout_url,
         transactionId: tranId,
+        amount: payment.amount,
+        status: payment.status,
       })
-    } else {
-      res.status(400)
-      throw new Error(response.data.status?.message || 'ABA PayWay error')
     }
+
+    res.status(400)
+    throw new Error('Failed to create ABA payment')
   } catch (error) {
-    console.error('ABA Payment error:', error.response?.data || error.message)
+    console.error('ABA PayWay error:', error.response?.data || error.message)
     res.status(500)
-    throw new Error(error.response?.data?.status?.message || 'Failed to create ABA payment')
+    throw new Error(error.response?.data?.status?.message || 'Failed to create QR code')
   }
 })
 
@@ -187,7 +241,7 @@ const createABAPayment = asyncHandler(async (req, res) => {
 // @route   POST /api/payments/aba-callback
 // @access  Public
 const abaCallback = asyncHandler(async (req, res) => {
-  const { tran_id, status, apv, amount } = req.body
+  const { tran_id, status, apv } = req.body
 
   try {
     const payment = await Payment.findOne({ transactionId: tran_id })
@@ -197,13 +251,11 @@ const abaCallback = asyncHandler(async (req, res) => {
     }
 
     if (status === '0' || status === 0) {
-      // ការទូទាត់ជោគជ័យ
       payment.status = 'completed'
       payment.transactionId = apv || tran_id
       payment.paidAt = Date.now()
       await payment.save()
 
-      // Update Order
       const order = await Order.findById(payment.order)
       if (order) {
         order.isPaid = true

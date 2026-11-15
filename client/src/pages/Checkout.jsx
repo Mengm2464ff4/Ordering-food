@@ -22,8 +22,6 @@ const Checkout = () => {
   const [qrData, setQrData] = useState('')
   const [paymentId, setPaymentId] = useState(null)
   const [orderId, setOrderId] = useState(null)
-
-  // ✅ បន្ថែម State សម្រាប់រក្សាទុកតម្លៃសរុបមុនពេល clearCart
   const [finalTotal, setFinalTotal] = useState(0)
 
   const {
@@ -59,6 +57,12 @@ const Checkout = () => {
   const onSubmit = async (data) => {
     setIsSubmitting(true)
 
+    if (total <= 0) {
+      toast.error('Invalid order total')
+      setIsSubmitting(false)
+      return
+    }
+
     const orderItems = cartItems.map(item => ({
       food: item.food?._id || item.food,
       name: item.name,
@@ -87,21 +91,27 @@ const Checkout = () => {
 
     if (order && paymentMethod === 'KHQR') {
       try {
-        const response = await axios.post('/payments/khqr', {
+        // ✅ ហៅ API ទៅកាន់ ABA PayWay
+        const response = await axios.post('/payments/aba-payway', {
           orderId: order._id,
           amount: total,
         })
 
-        setQrData(response.data.qrData)
+        const { qrData, checkoutUrl, qrImage } = response.data
+
+        // ✅ ប្រសិនបើមាន checkoutUrl (សម្រាប់ ABA PayWay ពិតប្រាកដ)
+        if (checkoutUrl) {
+          window.location.href = checkoutUrl
+          return
+        }
+
+        // ✅ ប្រសិនបើមាន qrData ឬ qrImage (សម្រាប់ QR Code)
+        setQrData(qrData || qrImage)
         setPaymentId(response.data.paymentId)
         setOrderId(order._id)
-
-        // ✅ រក្សាទុកតម្លៃសរុបមុនពេល clearCart
         setFinalTotal(total)
-
         setShowQR(true)
 
-        // សម្អាត Cart បន្ទាប់ពី ១ វិនាទី
         setTimeout(() => {
           clearCart()
         }, 1000)
@@ -116,7 +126,6 @@ const Checkout = () => {
     setIsSubmitting(false)
   }
 
-  // ✅ ពិនិត្យការទូទាត់រាល់ ៣ វិនាទី
   useEffect(() => {
     let interval
     if (showQR && paymentId) {
@@ -141,27 +150,29 @@ const Checkout = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <FiCheckCircle className="text-green-500 text-4xl" />
-          </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Scan to Pay</h2>
-          <p className="text-gray-600 mb-6">
-            Please scan the QR code below with your banking app to complete the payment of{' '}
-            {/* ✅ ប្រើ finalTotal ជំនួស total */}
-            <strong className="text-gray-900">${finalTotal.toFixed(2)}</strong>.
-          </p>
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 mb-6 inline-block">
-            <QRCode value={qrData} size={200} />
+          <p className="text-gray-500 mb-6">Open ABA Mobile or Bakong App</p>
+
+          <div className="bg-blue-50 rounded-xl p-4 mb-6">
+            <p className="text-sm text-blue-600 mb-1">Total Amount</p>
+            <p className="text-4xl font-bold text-blue-700">${finalTotal.toFixed(2)}</p>
           </div>
-          <p className="text-sm text-gray-500 mb-6">
-            After payment, your order will be confirmed automatically.
-          </p>
+
+          <div className="bg-white p-4 rounded-2xl border border-gray-200 mb-6 inline-block">
+            <QRCode value={qrData} size={220} />
+          </div>
+
+          <div className="flex items-center justify-center gap-2 text-gray-500 text-sm mb-6">
+            <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+            <span>Waiting for payment confirmation...</span>
+          </div>
+
           <Button
-            onClick={() => navigate('/orders')}
+            onClick={() => navigate('/profile')}
             variant="primary"
-            className="w-full"
+            className="w-full py-3 text-lg"
           >
-            View My Orders
+            I have paid / Go to Profile
           </Button>
         </div>
       </div>
@@ -182,31 +193,9 @@ const Checkout = () => {
               Contact Information
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="Full Name"
-                name="name"
-                register={register}
-                validation={{ required: 'Name is required' }}
-                error={errors.name?.message}
-                icon={FiUser}
-              />
-              <Input
-                label="Email"
-                type="email"
-                name="email"
-                register={register}
-                validation={{ required: 'Email is required' }}
-                error={errors.email?.message}
-                icon={FiMail}
-              />
-              <Input
-                label="Phone Number"
-                name="phone"
-                register={register}
-                validation={{ required: 'Phone is required' }}
-                error={errors.phone?.message}
-                icon={FiPhone}
-              />
+              <Input label="Full Name" name="name" register={register} validation={{ required: 'Name is required' }} error={errors.name?.message} icon={FiUser} />
+              <Input label="Email" type="email" name="email" register={register} validation={{ required: 'Email is required' }} error={errors.email?.message} icon={FiMail} />
+              <Input label="Phone Number" name="phone" register={register} validation={{ required: 'Phone is required' }} error={errors.phone?.message} icon={FiPhone} />
             </div>
           </div>
 
@@ -217,28 +206,10 @@ const Checkout = () => {
               Delivery Address
             </h2>
             <div className="space-y-4">
-              <Input
-                label="Street Address"
-                name="street"
-                register={register}
-                validation={{ required: 'Street address is required' }}
-                error={errors.street?.message}
-              />
+              <Input label="Street Address" name="street" register={register} validation={{ required: 'Street address is required' }} error={errors.street?.message} />
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Input
-                  label="City"
-                  name="city"
-                  register={register}
-                  validation={{ required: 'City is required' }}
-                  error={errors.city?.message}
-                />
-                <Input
-                  label="District"
-                  name="district"
-                  register={register}
-                  validation={{ required: 'District is required' }}
-                  error={errors.district?.message}
-                />
+                <Input label="City" name="city" register={register} validation={{ required: 'City is required' }} error={errors.city?.message} />
+                <Input label="District" name="district" register={register} validation={{ required: 'District is required' }} error={errors.district?.message} />
                 <Input label="Commune" name="commune" register={register} />
               </div>
             </div>
@@ -252,13 +223,7 @@ const Checkout = () => {
             </h2>
             <div className="space-y-3">
               <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
-                <input
-                  type="radio"
-                  value="KHQR"
-                  checked={paymentMethod === 'KHQR'}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="w-4 h-4 text-orange-500 focus:ring-orange-500"
-                />
+                <input type="radio" value="KHQR" checked={paymentMethod === 'KHQR'} onChange={(e) => setPaymentMethod(e.target.value)} className="w-4 h-4 text-orange-500 focus:ring-orange-500" />
                 <div className="ml-3">
                   <span className="font-medium">KHQR Payment</span>
                   <p className="text-sm text-gray-500">Pay using KHQR (Scan QR code with your banking app)</p>
@@ -266,13 +231,7 @@ const Checkout = () => {
               </label>
 
               <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
-                <input
-                  type="radio"
-                  value="Cash"
-                  checked={paymentMethod === 'Cash'}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="w-4 h-4 text-orange-500 focus:ring-orange-500"
-                />
+                <input type="radio" value="Cash" checked={paymentMethod === 'Cash'} onChange={(e) => setPaymentMethod(e.target.value)} className="w-4 h-4 text-orange-500 focus:ring-orange-500" />
                 <div className="ml-3">
                   <span className="font-medium">Cash on Delivery</span>
                   <p className="text-sm text-gray-500">Pay when you receive your order</p>
@@ -287,12 +246,7 @@ const Checkout = () => {
               <FiTruck className="text-orange-500" />
               Delivery Instructions (Optional)
             </h2>
-            <textarea
-              {...register('instructions')}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-              placeholder="Any special instructions for delivery..."
-            />
+            <textarea {...register('instructions')} rows={3} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500" placeholder="Any special instructions for delivery..." />
           </div>
 
           {/* Order Summary */}
