@@ -60,7 +60,7 @@ const Payments = () => {
   // Calculate summary stats (Based on ALL filtered payments, not just current page)
   const completedPayments = filteredPayments.filter(p => p.status === 'completed')
   const totalRevenue = completedPayments.reduce((sum, p) => sum + p.amount, 0)
-  const khqrPayments = filteredPayments.filter(p => p.method === 'KHQR').length
+  const khqrPayments = filteredPayments.filter(p => p.method === 'ABA_PAYWAY' || p.method === 'KHQR').length
   const cashPayments = filteredPayments.filter(p => p.method === 'Cash').length
 
   if (isLoading) return <Loader />
@@ -97,6 +97,7 @@ const Payments = () => {
             className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
           >
             <option value="all">All Methods</option>
+            <option value="ABA_PAYWAY">ABA_PAYWAY</option>
             <option value="KHQR">KHQR</option>
             <option value="Cash">Cash</option>
           </select>
