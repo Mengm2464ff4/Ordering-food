@@ -75,33 +75,6 @@ const Foods = () => {
     },
   } )
 
-  // const handleImageUpload = async (e) => {
-  //   const file = e.target.files[0]
-  //   if (!file) return
-
-  //   const reader = new FileReader()
-  //   reader.onloadend = () => {
-  //     setImagePreview(reader.result)
-  //   }
-  //   reader.readAsDataURL(file)
-
-  //   const uploadFormData = new FormData()
-  //   uploadFormData.append('image', file)
-
-  //   try {
-  //     const response = await axios.post('/upload', uploadFormData, {
-  //       headers: {
-  //         'Content-Type': 'multipart/form-data',
-  //       },
-  //     })
-  //     if (response.data.imageUrl) {
-  //       setFormData(prev => ({ ...prev, image: response.data.imageUrl }))
-  //       toast.success('Image uploaded!')
-  //     }
-  //   } catch (error) {
-  //     toast.error(error.response?.data?.message || 'Failed to upload image')
-  //   }
-  // }
   const handleImageUpload = async ( e ) => {
     const file = e.target.files[ 0 ];
     if ( !file ) return;
@@ -199,8 +172,8 @@ const Foods = () => {
     setEditingFood( null )
   }
 
-  const categories = [
-    'Khmer Food', 'Noodles', 'Rice', 'Seafood', 'Desserts', 'Beverages', 'Salads', 'Soups'
+   const categories = [
+    'Khmer Food', 'Fast Food', 'Appetizer', 'Beverages', 'Noodles', 'Rice', 'Seafood', 'Desserts', 'Salads', 'Soups'
   ]
 
   return (

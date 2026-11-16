@@ -23,11 +23,22 @@ const foodSchema = new mongoose.Schema({
   category: {
     type: String,
     required: [true, 'Category is required'],
-    enum: ['Khmer Food', 'Noodles', 'Rice', 'Seafood', 'Desserts', 'Beverages', 'Salads', 'Soups', 'Appetizers'],
+    enum: [
+      'Khmer Food', 
+      'Fast Food', 
+      'Appetizer', 
+      'Beverages', 
+      'Noodles', 
+      'Rice', 
+      'Seafood', 
+      'Desserts', 
+      'Salads', 
+      'Soups'
+    ],
   },
-  image: {
+    image: {
     type: String,
-    required: [true, 'Food image is required'],
+    default: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=1000&auto=format&fit=crop', // Default fallback
   },
   isAvailable: {
     type: Boolean,
