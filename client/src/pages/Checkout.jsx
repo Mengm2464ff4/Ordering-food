@@ -194,8 +194,29 @@ const Checkout = () => {
               <p className="text-3xl sm:text-4xl font-extrabold text-blue-700">${finalTotal.toFixed(2)}</p>
             </div>
 
-            <div className="bg-white p-3 sm:p-4 rounded-2xl border-2 border-orange-100 shadow-sm mb-6 inline-block">
+                       <div className="bg-white p-3 sm:p-4 rounded-2xl border-2 border-orange-100 shadow-sm mb-6 inline-block">
               <QRCode value={qrData} size={200} className="w-full max-w-[200px] h-auto" />
+            </div>
+
+            {/* ✅ Direct App Payment Buttons */}
+            <div className="space-y-3 mb-6">
+              <a 
+                href={`abamobilebank://ababank.com?type=payway&qrcode=${encodeURIComponent(qrData)}`}
+                className="flex items-center justify-center gap-2 w-full bg-[#005A9C] text-white py-3 rounded-xl font-bold hover:bg-[#004a80] transition-all shadow-md"
+              >
+                <FiSmartphone size={20} /> Pay with ABA Mobile
+              </a>
+              <a 
+                href={`https://bakong.nbc.gov.kh/pay?qrcode=${encodeURIComponent(qrData)}`}
+                className="flex items-center justify-center gap-2 w-full bg-[#E31B23] text-white py-3 rounded-xl font-bold hover:bg-[#c4161d] transition-all shadow-md"
+              >
+                <FiSmartphone size={20} /> Pay with Bakong
+              </a>
+            </div>
+
+            <div className="flex items-center justify-center gap-2 text-gray-500 text-xs font-medium mb-6">
+              <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+              <span>Waiting for payment confirmation...</span>
             </div>
 
             {/* ✅ Clear Instruction to scan */}
