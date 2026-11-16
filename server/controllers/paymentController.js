@@ -176,33 +176,64 @@ const createABAPayment = asyncHandler(async (req, res) => {
     throw new Error('Order not found') 
   }
 
+  const bakongAccount = 'abaakhppxxx@abaa' 
+  const merchantName = process.env.BAKONG_MERCHANT_NAME || 'VUTHY VUTHA'
+  const merchantCity = process.env.BAKONG_MERCHANT_CITY || 'Phnom Penh'
+
   const tranId = orderId.toString().slice(-10) + Date.now().toString().slice(-8)
   const formattedAmount = parseFloat(amount).toFixed(2)
-  
-  // ✅ Use the exact payment link ID from your dashboard
-  const paymentLinkId = 'ABAPAYm55533132' 
+  const expirationTimestamp = Date.now() + 15 * 60 * 1000 
 
-  // ✅ ABA PayWay Checkout URL Format
-  const checkoutUrl = `https://link.payway.com.kh/${paymentLinkId}?amount=${formattedAmount}&tran_id=${tranId}`
+  try {
+    const { BakongKHQR, khqrData, IndividualInfo } = require('bakong-khqr')
+    
+    const optionalData = {
+      currency: khqrData.currency.usd,
+      amount: formattedAmount,
+      billNumber: tranId,
+      expirationTimestamp: expirationTimestamp,
+      storeLabel: process.env.PAYWAY_MERCHANT_ID || 'ec478717', 
+    }
 
-  // Save to DB
-  const payment = await Payment.create({
-    order: orderId,
-    user: req.user._id,
-    amount: amount,
-    method: 'ABA_PAYWAY',
-    transactionId: tranId,
-    khqrData: { checkoutUrl: checkoutUrl },
-    status: 'pending',
-  })
+    const individualInfo = new IndividualInfo(
+      bakongAccount,
+      merchantName,
+      merchantCity,
+      optionalData
+    )
 
-  return res.json({
-    paymentId: payment._id,
-    checkoutUrl: checkoutUrl, // Frontend will redirect here
-    transactionId: tranId,
-    amount: payment.amount,
-    status: payment.status,
-  })
+    const khqr = new BakongKHQR()
+    const qrResponse = khqr.generateIndividual(individualInfo)
+
+    if (!qrResponse || qrResponse.status?.code !== 0) {
+      throw new Error('SDK failed to generate QR')
+    }
+
+    const qrString = qrResponse.data.qr
+
+    const payment = await Payment.create({
+      order: orderId,
+      user: req.user._id,
+      amount: amount,
+      method: 'ABA_PAYWAY',
+      transactionId: tranId,
+      khqrData: { qrString: qrString },
+      status: 'pending',
+    })
+
+    // ✅ THIS IS THE SECRET: We return the QR string AND the deep link!
+    return res.json({
+      paymentId: payment._id,
+      qrData: qrString, 
+      transactionId: tranId,
+      amount: payment.amount,
+      status: payment.status,
+    })
+  } catch (error) {
+    console.error('Bakong QR generation error:', error.message)
+    res.status(500)
+    throw new Error('Failed to generate Bakong QR code')
+  }
 })
 
 const abaCallback = asyncHandler(async (req, res) => {

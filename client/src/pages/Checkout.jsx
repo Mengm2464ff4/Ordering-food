@@ -202,21 +202,19 @@ const Checkout = () => {
               <QRCode value={qrData} size={200} className="w-full max-w-[200px] h-auto" />
             </div>
 
-                       {/* ✅ Official ABA PayWay Deep Link */}
+                      {/* ✅ Official Bakong & ABA Deep Links */}
             <div className="space-y-3 mb-6">
               <a 
-                href={`abamobilebank://ababank.com?type=payway&qrcode=${encodeURIComponent(qrData)}`}
+                href={`aba://pay?qr=${encodeURIComponent(qrData)}`}
                 className="flex items-center justify-center gap-2 w-full bg-[#005A9C] text-white py-3 rounded-xl font-bold hover:bg-[#004a80] transition-all shadow-md"
               >
                 <FiSmartphone size={20} /> Pay with ABA Mobile
               </a>
               <a 
-                href="https://bakong.nbc.gov.kh/download" 
-                target="_blank"
-                rel="noopener noreferrer"
+                href={`bakong://pay?qr=${encodeURIComponent(qrData)}`}
                 className="flex items-center justify-center gap-2 w-full bg-[#E31B23] text-white py-3 rounded-xl font-bold hover:bg-[#c4161d] transition-all shadow-md"
               >
-                <FiSmartphone size={20} /> Get Bakong App
+                <FiSmartphone size={20} /> Pay with Bakong
               </a>
             </div>
 
