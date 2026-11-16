@@ -205,16 +205,20 @@ const Checkout = () => {
             {/* ✅ Direct App Payment Buttons */}
             <div className="space-y-3 mb-6">
               <a 
-                href={`abamobilebank://ababank.com?type=payway&qrcode=${encodeURIComponent(qrData)}`}
+                href="https://itunes.apple.com/al/app/aba-mobile-bank/id968860649?mt=8"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 w-full bg-[#005A9C] text-white py-3 rounded-xl font-bold hover:bg-[#004a80] transition-all shadow-md"
               >
-                <FiSmartphone size={20} /> Pay with ABA Mobile
+                <FiSmartphone size={20} /> Open ABA Mobile
               </a>
               <a 
-                href={`bakong://pay?qrcode=${encodeURIComponent(qrData)}`}
+                href="https://play.google.com/store/apps/details?id=com.paygo24.ibank"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 w-full bg-[#E31B23] text-white py-3 rounded-xl font-bold hover:bg-[#c4161d] transition-all shadow-md"
               >
-                <FiSmartphone size={20} /> Pay with Bakong
+                <FiSmartphone size={20} /> Open Bakong App
               </a>
             </div>
 
