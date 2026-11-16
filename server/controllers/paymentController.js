@@ -5,8 +5,9 @@ const Payment = require('../models/Payment')
 const Order = require('../models/Order')
 const { khqrService } = require('../services/khqrService')
 const asyncHandler = require('express-async-handler')
+const { BakongKHQR, khqrData, IndividualInfo } = require('bakong-khqr')
 
-// Hash for check-transaction API
+// Hash for check-transaction API: concatenate merchant_id + tran_id
 const createABAHash = (data, apiKey) => {
   const sortedKeys = Object.keys(data).sort()
   const str = sortedKeys.map(key => `${key}=${data[key]}`).join('&')
@@ -166,7 +167,7 @@ const verifyPayment = asyncHandler(async (req, res) => {
   }
 })
 
-// ==================== ABA PAYWAY OFFICIAL API ====================
+// ==================== ABA PAYWAY / BAKONG ====================
 const createABAPayment = asyncHandler(async (req, res) => {
   const { orderId, amount } = req.body
   const order = await Order.findById(orderId)
@@ -175,115 +176,140 @@ const createABAPayment = asyncHandler(async (req, res) => {
     throw new Error('Order not found') 
   }
 
-  const merchantId = process.env.PAYWAY_MERCHANT_ID
-  const apiKey = process.env.PAYWAY_API_KEY
-  const baseUrl = process.env.PAYWAY_API_URL || 'https://checkout.payway.com.kh'
-
   const tranId = orderId.toString().slice(-10) + Date.now().toString().slice(-8)
-  
-  const now = new Date()
-  const reqTime = now.getUTCFullYear().toString() +
-    String(now.getUTCMonth() + 1).padStart(2, '0') +
-    String(now.getUTCDate()).padStart(2, '0') +
-    String(now.getUTCHours()).padStart(2, '0') +
-    String(now.getUTCMinutes()).padStart(2, '0') +
-    String(now.getUTCSeconds()).padStart(2, '0')
+  const formattedAmount = parseFloat(amount).toFixed(2)
 
-  const returnUrlEncoded = Buffer.from(`${process.env.CLIENT_URL}/payment/success?orderId=${orderId}`).toString('base64')
-  const cancelUrlEncoded = Buffer.from(`${process.env.CLIENT_URL}/payment/cancel?orderId=${orderId}`).toString('base64')
+  // ✅ Use your official Payment Link and pass the amount!
+  const baseLink = 'https://link.payway.com.kh/ABAPAYm55533132'
+  const checkoutUrl = `${baseLink}?amount=${formattedAmount}&tran_id=${tranId}`
 
-  const paymentData = {
-    merchant_id: merchantId,
-    tran_id: tranId,
-    amount: parseFloat(amount).toFixed(2),
-    currency: 'USD',
-    req_time: reqTime,
-    type: 'purchase',
-    return_url: returnUrlEncoded,
-    cancel_url: cancelUrlEncoded,
-    continue_success_url: `${process.env.CLIENT_URL}/payment/success?orderId=${orderId}`,
-    payment_option: 'abapay_khqr',
-  }
+  // Save to DB
+  const payment = await Payment.create({
+    order: orderId,
+    user: req.user._id,
+    amount: amount,
+    method: 'ABA_PAYWAY',
+    transactionId: tranId,
+    khqrData: { checkoutUrl: checkoutUrl },
+    status: 'pending',
+  })
 
-  paymentData.hash = createPurchaseHash(paymentData, apiKey)
-
-  try {
-    // ✅ MUST send as Form URL Encoded
-    const formData = new URLSearchParams()
-    for (const key in paymentData) {
-      formData.append(key, paymentData[key])
-    }
-
-    const response = await axios.post(
-      `${baseUrl}/api/payment-gateway/v1/payments/purchase`,
-      formData.toString(),
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-    )
-
-    console.log('👉 PAYWAY RESPONSE:', response.data)
-
-    const qrString = response.data.qrString
-    const checkoutUrl = response.data.checkout_url
-
-    if (!qrString && !checkoutUrl) {
-      throw new Error('No QR code or Checkout URL returned from ABA')
-    }
-
-    const payment = await Payment.create({
-      order: orderId,
-      user: req.user._id,
-      amount: amount,
-      method: 'ABA_PAYWAY',
-      transactionId: tranId,
-      khqrData: { qrString: qrString, checkoutUrl: checkoutUrl },
-      status: 'pending',
-    })
-
-    return res.json({
-      paymentId: payment._id,
-      qrData: qrString || checkoutUrl, // If no QR, frontend redirects to URL
-      checkoutUrl: checkoutUrl,
-      transactionId: tranId,
-      amount: payment.amount,
-      status: payment.status,
-    })
-
-  } catch (error) {
-    console.error('ABA PayWay API Error:', error.response?.data || error.message)
-    res.status(500)
-    throw new Error(error.response?.data?.status?.message || 'Failed to create ABA payment')
-  }
+  return res.json({
+    paymentId: payment._id,
+    checkoutUrl: checkoutUrl, // Frontend will redirect here
+    transactionId: tranId,
+    amount: payment.amount,
+    status: payment.status,
+  })
 })
 
 const abaCallback = asyncHandler(async (req, res) => {
-  // ... (keep your existing callback logic)
   const { tran_id, status, apv } = req.body
+
   try {
     const payment = await Payment.findOne({ transactionId: tran_id })
-    if (!payment) return res.status(404).json({ message: 'Payment not found' })
+    if (!payment) {
+      return res.status(404).json({ message: 'Payment not found' })
+    }
 
     if (status === '0' || status === 0) {
       payment.status = 'completed'
       payment.transactionId = apv || tran_id
       payment.paidAt = Date.now()
       await payment.save()
+
       const order = await Order.findById(payment.order)
-      if (order) { order.isPaid = true; order.paidAt = Date.now(); await order.save() }
+      if (order) {
+        order.isPaid = true
+        order.paidAt = Date.now()
+        await order.save()
+      }
     } else {
       payment.status = 'failed'
       await payment.save()
     }
+
     res.status(200).json({ message: 'Callback received' })
   } catch (error) {
+    console.error('ABA Callback error:', error)
     res.status(500).json({ message: 'Callback processing failed' })
   }
 })
 
-const getPaymentStatus = asyncHandler(async (req, res) => { /* keep existing */ })
-const getPayments = asyncHandler(async (req, res) => { /* keep existing */ })
-const getPaymentHistory = asyncHandler(async (req, res) => { /* keep existing */ })
-const getPaymentByOrder = asyncHandler(async (req, res) => { /* keep existing */ })
-const refundPayment = asyncHandler(async (req, res) => { /* keep existing */ })
+const getPaymentStatus = asyncHandler(async (req, res) => {
+  const payment = await Payment.findById(req.params.id)
+  if (!payment) {
+    res.status(404)
+    throw new Error('Payment not found')
+  }
+  res.json({
+    status: payment.status,
+    paidAt: payment.paidAt,
+    transactionId: payment.transactionId,
+  })
+})
+
+const getPayments = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page) || 1
+  const limit = parseInt(req.query.limit) || 10
+  const status = req.query.status
+
+  let query = {}
+  if (status && status !== 'all') query.status = status
+
+  const count = await Payment.countDocuments(query)
+  const payments = await Payment.find(query)
+    .populate('user', 'name email')
+    .populate('order')
+    .sort('-createdAt')
+    .limit(limit)
+    .skip((page - 1) * limit)
+
+  res.json({
+    payments,
+    page,
+    pages: Math.ceil(count / limit),
+    total: count,
+  })
+})
+
+const getPaymentHistory = asyncHandler(async (req, res) => {
+  const payments = await Payment.find({ user: req.user._id })
+    .populate('order')
+    .sort('-createdAt')
+  res.json(payments)
+})
+
+const getPaymentByOrder = asyncHandler(async (req, res) => {
+  const payment = await Payment.findOne({ order: req.params.orderId })
+  if (!payment) {
+    res.status(404)
+    throw new Error('Payment not found for this order')
+  }
+  res.json(payment)
+})
+
+const refundPayment = asyncHandler(async (req, res) => {
+  const { reason } = req.body
+  const payment = await Payment.findById(req.params.id)
+
+  if (!payment) {
+    res.status(404)
+    throw new Error('Payment not found')
+  }
+
+  if (payment.status !== 'completed') {
+    res.status(400)
+    throw new Error('Only completed payments can be refunded')
+  }
+
+  payment.status = 'refunded'
+  payment.refundReason = reason
+  payment.refundedAt = Date.now()
+  await payment.save()
+
+  res.json({ message: 'Payment refunded successfully', payment })
+})
 
 module.exports = {
   createKHQRPayment,
