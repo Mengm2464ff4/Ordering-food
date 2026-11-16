@@ -2,7 +2,7 @@ import React from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getOrderById } from '../api/orderApi'
-import { FiPackage, FiClock, FiCheckCircle, FiTruck, FiMapPin, FiPhone, FiMail, FiDollarSign, FiArrowLeft } from 'react-icons/fi'
+import { FiPackage, FiClock, FiCheckCircle, FiTruck, FiMapPin, FiPhone, FiDollarSign, FiArrowLeft, FiStar } from 'react-icons/fi'
 import Loader from '../components/common/Loader'
 import ErrorMessage from '../components/common/ErrorMessage'
 import Button from '../components/common/Button'
@@ -12,10 +12,10 @@ const OrderDetails = () => {
   const navigate = useNavigate()
   
   const { data: order, isLoading, error, refetch } = useQuery({
-  queryKey: ['order', id],
-  queryFn: () => getOrderById(id),
-  enabled: !!id
-})
+    queryKey: ['order', id],
+    queryFn: () => getOrderById(id),
+    enabled: !!id
+  })
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -63,7 +63,6 @@ const OrderDetails = () => {
   if (error) return <ErrorMessage message={error.message} onRetry={refetch} />
   if (!order) return <ErrorMessage message="Order not found" />
    
- 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       {/* Header */}
@@ -78,6 +77,25 @@ const OrderDetails = () => {
       </div>
 
       <div className="space-y-6">
+        
+        {/* ✅ Review Prompt (Only shows if Delivered) */}
+        {order.status === 'delivered' && (
+          <div className="bg-gradient-to-r from-orange-500 to-orange-400 rounded-xl shadow-lg p-6 sm:p-8 text-white flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-bold mb-1 flex items-center gap-2">
+                <FiStar className="fill-current text-yellow-300" /> How was your food?
+              </h2>
+              <p className="text-orange-50">Your feedback helps us improve and helps other customers!</p>
+            </div>
+            <Button 
+              onClick={() => navigate(`/food/${order.orderItems[0]?.food}#reviews`)}
+              className="bg-white text-orange-500 hover:bg-gray-50 whitespace-nowrap px-6 py-3 rounded-xl shadow-md font-bold w-full sm:w-auto"
+            >
+              Write a Review
+            </Button>
+          </div>
+        )}
+
         {/* Order Status Timeline */}
         <div className="bg-white rounded-xl shadow-md p-6">
           <h2 className="text-lg font-semibold mb-4">Order Status</h2>

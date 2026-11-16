@@ -2,9 +2,8 @@ import React, { useState, useContext } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getFoodReviews, createReview, deleteReview } from '../../api/reviewApi'
 import { AuthContext } from '../../context/AuthContext'
-import { FiStar, FiTrash2, FiUser, FiClock } from 'react-icons/fi'
+import { FiStar, FiTrash2, FiUser, FiClock, FiMessageSquare } from 'react-icons/fi'
 import Button from '../common/Button'
-import Input from '../common/Input'
 import Loader from '../common/Loader'
 import EmptyState from '../common/EmptyState'
 import toast from 'react-hot-toast'
@@ -56,21 +55,11 @@ const FoodReview = ({ foodId }) => {
 
   const handleSubmitReview = (e) => {
     e.preventDefault()
-    if (!user) {
-      toast.error('Please login to submit a review')
-      return
-    }
-    if (!comment.trim()) {
-      toast.error('Please enter a comment')
-      return
-    }
+    if (!user) return toast.error('Please login to submit a review')
+    if (!comment.trim()) return toast.error('Please enter a comment')
     
     setIsSubmitting(true)
-    createReviewMutation.mutate({
-      foodId,
-      rating,
-      comment,
-    })
+    createReviewMutation.mutate({ foodId, rating, comment })
   }
 
   const handleDeleteReview = (reviewId) => {
@@ -82,7 +71,7 @@ const FoodReview = ({ foodId }) => {
   const formatDate = (date) => {
     return new Date(date).toLocaleDateString('en-US', {
       year: 'numeric',
-      month: 'long',
+      month: 'short',
       day: 'numeric',
     })
   }
@@ -98,38 +87,40 @@ const FoodReview = ({ foodId }) => {
   }))
 
   return (
-    <div className="bg-white rounded-xl shadow-md p-6">
-      <h2 className="text-2xl font-bold mb-6">Customer Reviews</h2>
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8 mt-10">
+      <h2 className="text-2xl font-bold text-gray-900 mb-8 flex items-center gap-2">
+        <FiMessageSquare className="text-orange-500" /> Customer Reviews
+      </h2>
 
       {/* Rating Summary */}
       {reviews && reviews.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 pb-6 border-b">
-          <div className="text-center">
-            <div className="text-5xl font-bold text-orange-500">{averageRating}</div>
-            <div className="flex items-center justify-center mt-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10 pb-8 border-b border-gray-100">
+          <div className="flex flex-col items-center justify-center bg-orange-50 rounded-2xl p-6">
+            <div className="text-6xl font-extrabold text-orange-500">{averageRating}</div>
+            <div className="flex items-center mt-3 mb-1">
               {[1, 2, 3, 4, 5].map((star) => (
                 <FiStar
                   key={star}
                   className={`text-2xl ${
-                    star <= averageRating ? 'text-yellow-400 fill-current' : 'text-gray-300'
+                    star <= averageRating ? 'text-orange-400 fill-current' : 'text-gray-300'
                   }`}
                 />
               ))}
             </div>
-            <div className="text-gray-500 mt-2">Based on {reviews.length} reviews</div>
+            <div className="text-gray-600 font-medium">Based on {reviews.length} reviews</div>
           </div>
 
-          <div>
+          <div className="flex flex-col justify-center">
             {ratingDistribution.map(({ star, percentage }) => (
-              <div key={star} className="flex items-center gap-2 mb-2">
-                <div className="w-12 text-sm">{star} stars</div>
-                <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div key={star} className="flex items-center gap-3 mb-2.5">
+                <div className="w-12 text-sm font-medium text-gray-700">{star} star</div>
+                <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
                   <div 
-                    className="h-full bg-orange-500 rounded-full"
+                    className="h-full bg-orange-400 rounded-full transition-all duration-500"
                     style={{ width: `${percentage}%` }}
                   />
                 </div>
-                <div className="w-12 text-sm text-gray-500">{percentage.toFixed(0)}%</div>
+                <div className="w-10 text-sm text-gray-500 text-right">{percentage.toFixed(0)}%</div>
               </div>
             ))}
           </div>
@@ -138,11 +129,11 @@ const FoodReview = ({ foodId }) => {
 
       {/* Write Review Form */}
       {user && (
-        <form onSubmit={handleSubmitReview} className="mb-8 p-4 bg-gray-50 rounded-lg">
-          <h3 className="font-semibold mb-3">Write a Review</h3>
+        <form onSubmit={handleSubmitReview} className="mb-10 bg-gray-50 border border-gray-100 p-6 rounded-2xl">
+          <h3 className="font-bold text-gray-900 text-lg mb-4">Write a Review</h3>
           
-          <div className="mb-3">
-            <label className="block text-sm font-medium mb-2">Your Rating</label>
+          <div className="mb-5">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Your Rating</label>
             <div className="flex gap-1">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
@@ -151,12 +142,12 @@ const FoodReview = ({ foodId }) => {
                   onClick={() => setRating(star)}
                   onMouseEnter={() => setHoverRating(star)}
                   onMouseLeave={() => setHoverRating(0)}
-                  className="focus:outline-none"
+                  className="focus:outline-none transition-transform hover:scale-110"
                 >
                   <FiStar
-                    className={`text-3xl transition-colors ${
+                    className={`text-4xl transition-colors ${
                       star <= (hoverRating || rating)
-                        ? 'text-yellow-400 fill-current'
+                        ? 'text-orange-400 fill-current'
                         : 'text-gray-300'
                     }`}
                   />
@@ -165,18 +156,18 @@ const FoodReview = ({ foodId }) => {
             </div>
           </div>
 
-          <div className="mb-3">
-            <label className="block text-sm font-medium mb-2">Your Comment</label>
+          <div className="mb-5">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Your Comment</label>
             <textarea
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               rows={4}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white resize-none transition-all"
               placeholder="Share your experience with this dish..."
             />
           </div>
 
-          <Button type="submit" disabled={isSubmitting}>
+          <Button type="submit" disabled={isSubmitting} className="px-8 py-3 rounded-xl shadow-sm">
             {isSubmitting ? 'Submitting...' : 'Submit Review'}
           </Button>
         </form>
@@ -192,51 +183,57 @@ const FoodReview = ({ foodId }) => {
           icon="heart"
         />
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-8">
           {reviews.map((review) => (
-            <div key={review._id} className="border-b last:border-b-0 pb-6">
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-orange-400 to-orange-600 flex items-center justify-center">
-                      <FiUser className="text-white" size={16} />
-                    </div>
-                    <span className="font-semibold">{review.user?.name || 'Anonymous'}</span>
+            <div key={review._id} className="border-b border-gray-100 last:border-0 pb-8 last:pb-0">
+              <div className="flex justify-between items-start mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center shadow-sm">
+                    <FiUser className="text-white" size={18} />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <FiStar
-                          key={star}
-                          className={`text-sm ${
-                            star <= review.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'
-                          }`}
-                        />
-                      ))}
+                  <div>
+                    <span className="font-bold text-gray-900 block">{review.user?.name || 'Anonymous'}</span>
+                    <div className="flex items-center gap-3 mt-1">
+                      <div className="flex">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <FiStar
+                            key={star}
+                            className={`text-sm ${
+                              star <= review.rating ? 'text-orange-400 fill-current' : 'text-gray-200'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-xs text-gray-400 flex items-center gap-1">
+                        <FiClock size={12} />
+                        {formatDate(review.createdAt)}
+                      </span>
                     </div>
-                    <span className="text-xs text-gray-400 flex items-center gap-1">
-                      <FiClock size={12} />
-                      {formatDate(review.createdAt)}
-                    </span>
                   </div>
                 </div>
                 
                 {(user?.role === 'admin' || user?._id === review.user?._id) && (
                   <button
                     onClick={() => handleDeleteReview(review._id)}
-                    className="text-red-500 hover:text-red-600 transition"
+                    className="text-gray-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                    title="Delete review"
                   >
                     <FiTrash2 size={18} />
                   </button>
                 )}
               </div>
               
-              <p className="text-gray-700 mt-2">{review.comment}</p>
+              <p className="text-gray-700 mt-3 leading-relaxed sm:ml-13">{review.comment}</p>
               
               {review.images && review.images.length > 0 && (
-                <div className="flex gap-2 mt-3">
+                <div className="flex gap-2 mt-4 sm:ml-13">
                   {review.images.map((image, idx) => (
-                    <img key={idx} src={image} alt="" className="w-16 h-16 object-cover rounded" />
+                    <img 
+                      key={idx} 
+                      src={image} 
+                      alt="Review" 
+                      className="w-20 h-20 object-cover rounded-xl border border-gray-100 shadow-sm" 
+                    />
                   ))}
                 </div>
               )}
