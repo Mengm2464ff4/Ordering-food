@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react'
+import React, { useState, useContext, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import axios from '../api/axios'
@@ -8,7 +8,7 @@ import { CartContext } from '../context/CartContext'
 import { OrderContext } from '../context/OrderContext'
 import { 
   FiMapPin, FiPhone, FiUser, FiMail, FiCreditCard, FiTruck, 
-  FiCheckCircle, FiLock, FiShield, FiClock, FiSmartphone 
+  FiCheckCircle, FiLock, FiShield, FiClock, FiSmartphone, FiDownload
 } from 'react-icons/fi'
 import QRCode from 'react-qr-code'
 import Button from '../components/common/Button'
@@ -30,6 +30,9 @@ const Checkout = () => {
 
   // ✅ Timer State (3 minutes = 180 seconds)
   const [timeLeft, setTimeLeft] = useState(180)
+  
+  // ✅ Ref for the QR Code container
+  const qrRef = useRef(null)
 
   const { register, handleSubmit, setValue, formState: { errors } } = useForm()
 
@@ -78,6 +81,28 @@ const Checkout = () => {
     return `${m}:${s}`
   }
 
+  // ✅ Function to Download QR to Gallery
+  const downloadQR = () => {
+    const svg = qrRef.current.querySelector('svg')
+    const svgData = new XMLSerializer().serializeToString(svg)
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    const img = new Image()
+    img.onload = () => {
+      canvas.width = img.width
+      canvas.height = img.height
+      ctx.fillStyle = 'white'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(img, 0, 0)
+      const pngFile = canvas.toDataURL('image/png')
+      const downloadLink = document.createElement('a')
+      downloadLink.download = `KHQR-Order-${orderId}.png`
+      downloadLink.href = `${pngFile}`
+      downloadLink.click()
+    }
+    img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgData)))}`
+  }
+
   const onSubmit = async (data) => {
     setIsSubmitting(true)
 
@@ -115,7 +140,6 @@ const Checkout = () => {
       const order = await createNewOrder(orderData)
 
       if (order && paymentMethod === 'KHQR') {
-        // Calls your backend to get the Bakong QR string
         const response = await axios.post('/payments/aba-payway', {
           orderId: order._id,
           amount: total,
@@ -127,7 +151,7 @@ const Checkout = () => {
           setPaymentId(response.data.paymentId)
           setOrderId(order._id)
           setFinalTotal(total)
-          setTimeLeft(180) // Reset timer to 3 mins
+          setTimeLeft(180)
           setShowQR(true)
           setTimeout(() => { clearCart() }, 1000)
         } else {
@@ -178,7 +202,7 @@ const Checkout = () => {
             <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-1">Scan to Pay</h2>
             <p className="text-gray-500 mb-4 text-sm sm:text-base font-medium">Open ABA Mobile or Bakong App</p>
 
-            {/* ✅ 3-Minute Timer */}
+            {/* 3-Minute Timer */}
             <div className="flex items-center justify-center gap-2 mb-4">
               <span className={`px-4 py-1.5 rounded-full text-sm font-bold flex items-center gap-2 border ${
                 timeLeft < 30 
@@ -194,35 +218,23 @@ const Checkout = () => {
               <p className="text-3xl sm:text-4xl font-extrabold text-blue-700">${finalTotal.toFixed(2)}</p>
             </div>
 
-                       <div className="bg-white p-3 sm:p-4 rounded-2xl border-2 border-orange-100 shadow-sm mb-6 inline-block">
+            <div ref={qrRef} className="bg-white p-3 sm:p-4 rounded-2xl border-2 border-orange-100 shadow-sm mb-6 inline-block">
               <QRCode value={qrData} size={200} className="w-full max-w-[200px] h-auto" />
             </div>
 
-            {/* ✅ Direct App Payment Buttons */}
-            <div className="space-y-3 mb-6">
-              <a 
-                href={`abamobilebank://ababank.com?type=payway&qrcode=${encodeURIComponent(qrData)}`}
-                className="flex items-center justify-center gap-2 w-full bg-[#005A9C] text-white py-3 rounded-xl font-bold hover:bg-[#004a80] transition-all shadow-md"
-              >
-                <FiSmartphone size={20} /> Pay with ABA Mobile
-              </a>
-              <a 
-                href={`https://bakong.nbc.gov.kh/pay?qrcode=${encodeURIComponent(qrData)}`}
-                className="flex items-center justify-center gap-2 w-full bg-[#E31B23] text-white py-3 rounded-xl font-bold hover:bg-[#c4161d] transition-all shadow-md"
-              >
-                <FiSmartphone size={20} /> Pay with Bakong
-              </a>
-            </div>
+            <button
+              onClick={downloadQR}
+              className="flex items-center justify-center gap-2 w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-md mb-4"
+            >
+              <FiDownload size={20} /> Save QR to Phone
+            </button>
 
-            <div className="flex items-center justify-center gap-2 text-gray-500 text-xs font-medium mb-6">
-              <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
-              <span>Waiting for payment confirmation...</span>
-            </div>
-
-            {/* ✅ Clear Instruction to scan */}
-            <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 mb-6">
+            <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 mb-6 text-left">
               <p className="text-sm text-orange-800 font-medium">
-                Please open your <strong>ABA Mobile</strong> or <strong>Bakong App</strong>, tap the <strong>Scan QR</strong> button, and scan the code above to complete your payment.
+                <strong>How to pay:</strong><br/>
+                1. Click "Save QR to Phone" above.<br/>
+                2. Open <strong>ABA Mobile</strong> or <strong>Bakong</strong>.<br/>
+                3. Tap <strong>Scan QR</strong>, then select the saved image from your gallery.
               </p>
             </div>
 
