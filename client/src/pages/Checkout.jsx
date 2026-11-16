@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 import { AuthContext } from '../context/AuthContext'
 import { CartContext } from '../context/CartContext'
 import { OrderContext } from '../context/OrderContext'
-import { FiMapPin, FiPhone, FiUser, FiMail, FiCreditCard, FiTruck, FiCheckCircle } from 'react-icons/fi'
+import { FiMapPin, FiPhone, FiUser, FiMail, FiCreditCard, FiTruck, FiCheckCircle, FiLock, FiShield } from 'react-icons/fi'
 import QRCode from 'react-qr-code'
 import Button from '../components/common/Button'
 import Input from '../components/common/Input'
@@ -16,6 +16,7 @@ const Checkout = () => {
   const { cartItems, getCartSubtotal, getCartTotal, getDeliveryFee, getTaxAmount, clearCart } = useContext(CartContext)
   const { createNewOrder } = useContext(OrderContext)
   const navigate = useNavigate()
+  
   const [paymentMethod, setPaymentMethod] = useState('KHQR')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showQR, setShowQR] = useState(false)
@@ -24,12 +25,7 @@ const Checkout = () => {
   const [orderId, setOrderId] = useState(null)
   const [finalTotal, setFinalTotal] = useState(0)
 
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    formState: { errors },
-  } = useForm()
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm()
 
   useEffect(() => {
     if (user) {
@@ -90,19 +86,17 @@ const Checkout = () => {
     try {
       const order = await createNewOrder(orderData)
 
-            if (order && paymentMethod === 'KHQR') {
+      if (order && paymentMethod === 'KHQR') {
         const response = await axios.post('/payments/aba-payway', {
           orderId: order._id,
           amount: total,
         })
 
-        // ✅ Redirect to PayWay Checkout URL
         if (response.data.checkoutUrl) {
           window.location.href = response.data.checkoutUrl;
           return;
         }
 
-        // Fallback if QR string is returned
         const qrString = response.data.qrData || response.data.qrImage
         if (qrString) {
           setQrData(qrString)
@@ -127,13 +121,13 @@ const Checkout = () => {
     setIsSubmitting(false)
   }
 
+  // Polling for payment status
   useEffect(() => {
     let interval
     if (showQR && paymentId) {
       interval = setInterval(async () => {
         try {
           const response = await axios.post('/payments/verify', { paymentId })
-
           if (response.data.paid) {
             clearInterval(interval)
             toast.success('Payment successful!')
@@ -147,147 +141,181 @@ const Checkout = () => {
     return () => clearInterval(interval)
   }, [showQR, paymentId, orderId, navigate])
 
+  // ==================== QR CODE SCREEN ====================
   if (showQR) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Scan to Pay</h2>
-          <p className="text-gray-500 mb-6">Open ABA Mobile or Bakong App</p>
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center py-12 px-4">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 text-center relative overflow-hidden">
+          
+          {/* Decorative background circle */}
+          <div className="absolute -top-10 -right-10 w-32 h-32 bg-orange-100 rounded-full opacity-50"></div>
 
-          <div className="bg-blue-50 rounded-xl p-4 mb-6">
-            <p className="text-sm text-blue-600 mb-1">Total Amount</p>
-            <p className="text-4xl font-bold text-blue-700">${finalTotal.toFixed(2)}</p>
+          <div className="relative z-10">
+            <h2 className="text-3xl font-extrabold text-gray-900 mb-2">Scan to Pay</h2>
+            <p className="text-gray-500 mb-6 font-medium">Open ABA Mobile or Bakong App</p>
+
+            <div className="bg-blue-50 rounded-2xl p-6 mb-8 border border-blue-100">
+              <p className="text-sm text-blue-600 font-semibold mb-1 uppercase tracking-wide">Total Amount</p>
+              <p className="text-5xl font-extrabold text-blue-700">${finalTotal.toFixed(2)}</p>
+            </div>
+
+            <div className="bg-white p-5 rounded-3xl border-2 border-orange-100 shadow-sm mb-8 inline-block">
+              <QRCode value={qrData} size={240} />
+            </div>
+
+            <div className="flex items-center justify-center gap-3 text-gray-600 font-medium mb-8 bg-gray-50 py-3 rounded-full">
+              <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+              <span>Waiting for payment confirmation...</span>
+            </div>
+
+            <Button
+              onClick={() => navigate('/profile')}
+              className="w-full py-4 text-lg rounded-xl shadow-lg hover:shadow-xl transition-all"
+            >
+              I have paid / Go to Profile
+            </Button>
           </div>
-
-          <div className="bg-white p-4 rounded-2xl border border-gray-200 mb-6 inline-block">
-            <QRCode value={qrData} size={220} />
-          </div>
-
-          <div className="flex items-center justify-center gap-2 text-gray-500 text-sm mb-6">
-            <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
-            <span>Waiting for payment confirmation...</span>
-          </div>
-
-          <Button
-            onClick={() => navigate('/profile')}
-            variant="primary"
-            className="w-full py-3 text-lg"
-          >
-            I have paid / Go to Profile
-          </Button>
         </div>
       </div>
     )
   }
 
+  // ==================== MAIN CHECKOUT FORM ====================
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-2">Checkout</h1>
-        <p className="text-gray-600 mb-8">Complete your order information</p>
+    <div className="min-h-screen bg-gray-50 py-10 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-3xl font-extrabold text-gray-900">Checkout</h1>
+          <p className="text-gray-500 mt-1">Complete your order to get delicious food delivered.</p>
+        </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          {/* Contact Information */}
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <FiUser className="text-orange-500" />
-              Contact Information
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input label="Full Name" name="name" register={register} validation={{ required: 'Name is required' }} error={errors.name?.message} icon={FiUser} />
-              <Input label="Email" type="email" name="email" register={register} validation={{ required: 'Email is required' }} error={errors.email?.message} icon={FiMail} />
-              <Input label="Phone Number" name="phone" register={register} validation={{ required: 'Phone is required' }} error={errors.phone?.message} icon={FiPhone} />
-            </div>
-          </div>
-
-          {/* Delivery Address */}
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <FiMapPin className="text-orange-500" />
-              Delivery Address
-            </h2>
-            <div className="space-y-4">
-              <Input label="Street Address" name="street" register={register} validation={{ required: 'Street address is required' }} error={errors.street?.message} />
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Input label="City" name="city" register={register} validation={{ required: 'City is required' }} error={errors.city?.message} />
-                <Input label="District" name="district" register={register} validation={{ required: 'District is required' }} error={errors.district?.message} />
-                <Input label="Commune" name="commune" register={register} />
-              </div>
-            </div>
-          </div>
-
-          {/* Payment Method */}
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <FiCreditCard className="text-orange-500" />
-              Payment Method
-            </h2>
-            <div className="space-y-3">
-              <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
-                <input type="radio" value="KHQR" checked={paymentMethod === 'KHQR'} onChange={(e) => setPaymentMethod(e.target.value)} className="w-4 h-4 text-orange-500 focus:ring-orange-500" />
-                <div className="ml-3">
-                  <span className="font-medium">KHQR Payment</span>
-                  <p className="text-sm text-gray-500">Pay using KHQR (Scan QR code with your banking app)</p>
-                </div>
-              </label>
-
-              <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
-                <input type="radio" value="Cash" checked={paymentMethod === 'Cash'} onChange={(e) => setPaymentMethod(e.target.value)} className="w-4 h-4 text-orange-500 focus:ring-orange-500" />
-                <div className="ml-3">
-                  <span className="font-medium">Cash on Delivery</span>
-                  <p className="text-sm text-gray-500">Pay when you receive your order</p>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          {/* Delivery Instructions */}
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <FiTruck className="text-orange-500" />
-              Delivery Instructions (Optional)
-            </h2>
-            <textarea {...register('instructions')} rows={3} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500" placeholder="Any special instructions for delivery..." />
-          </div>
-
-          {/* Order Summary */}
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <h2 className="text-xl font-bold mb-4">Order Summary</h2>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Subtotal ({cartItems.length} items)</span>
-                <span>${subtotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Delivery Fee</span>
-                <span>${deliveryFee.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Tax (10%)</span>
-                <span>${tax.toFixed(2)}</span>
-              </div>
-              <div className="border-t pt-2 mt-2">
-                <div className="flex justify-between font-bold text-lg">
-                  <span>Total</span>
-                  <span className="text-orange-500">${total.toFixed(2)}</span>
+        <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* Left Column: Form Details */}
+          <div className="lg:col-span-2 space-y-6">
+            
+            {/* Contact Information */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8">
+              <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                <span className="bg-orange-100 p-2 rounded-lg text-orange-500"><FiUser size={20} /></span>
+                Contact Information
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <Input label="Full Name" name="name" register={register} validation={{ required: 'Name is required' }} error={errors.name?.message} icon={FiUser} />
+                <Input label="Email" type="email" name="email" register={register} validation={{ required: 'Email is required' }} error={errors.email?.message} icon={FiMail} />
+                <div className="sm:col-span-2">
+                  <Input label="Phone Number" name="phone" register={register} validation={{ required: 'Phone is required' }} error={errors.phone?.message} icon={FiPhone} />
                 </div>
               </div>
             </div>
 
-            <Button type="submit" disabled={isSubmitting} className="w-full mt-6">
-              {isSubmitting ? (
-                <div className="flex items-center justify-center gap-2">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  Processing...
+            {/* Delivery Address */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8">
+              <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                <span className="bg-orange-100 p-2 rounded-lg text-orange-500"><FiMapPin size={20} /></span>
+                Delivery Address
+              </h2>
+              <div className="space-y-5">
+                <Input label="Street Address" name="street" register={register} validation={{ required: 'Street address is required' }} error={errors.street?.message} />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                  <Input label="City" name="city" register={register} validation={{ required: 'City is required' }} error={errors.city?.message} />
+                  <Input label="District" name="district" register={register} validation={{ required: 'District is required' }} error={errors.district?.message} />
+                  <Input label="Commune" name="commune" register={register} />
                 </div>
-              ) : (
-                <div className="flex items-center justify-center gap-2">
-                  <FiCheckCircle />
-                  Place Order
-                </div>
-              )}
-            </Button>
+              </div>
+            </div>
+
+            {/* Payment Method */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8">
+              <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                <span className="bg-orange-100 p-2 rounded-lg text-orange-500"><FiCreditCard size={20} /></span>
+                Payment Method
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                {/* KHQR Option */}
+                <label className={`relative flex cursor-pointer rounded-xl border p-4 shadow-sm focus:outline-none transition-all ${paymentMethod === 'KHQR' ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'border-gray-200 bg-white hover:bg-gray-50'}`}>
+                  <input type="radio" value="KHQR" checked={paymentMethod === 'KHQR'} onChange={(e) => setPaymentMethod(e.target.value)} className="sr-only" />
+                  <div className="flex flex-col">
+                    <span className="block text-sm font-semibold text-gray-900">KHQR Payment</span>
+                    <span className="mt-1 flex items-center text-sm text-gray-500">Scan QR with ABA or Bakong.</span>
+                  </div>
+                  {paymentMethod === 'KHQR' && <FiCheckCircle className="absolute top-4 right-4 text-orange-500 text-xl" />}
+                </label>
+
+                {/* Cash Option */}
+                <label className={`relative flex cursor-pointer rounded-xl border p-4 shadow-sm focus:outline-none transition-all ${paymentMethod === 'Cash' ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'border-gray-200 bg-white hover:bg-gray-50'}`}>
+                  <input type="radio" value="Cash" checked={paymentMethod === 'Cash'} onChange={(e) => setPaymentMethod(e.target.value)} className="sr-only" />
+                  <div className="flex flex-col">
+                    <span className="block text-sm font-semibold text-gray-900">Cash on Delivery</span>
+                    <span className="mt-1 flex items-center text-sm text-gray-500">Pay when food arrives.</span>
+                  </div>
+                  {paymentMethod === 'Cash' && <FiCheckCircle className="absolute top-4 right-4 text-orange-500 text-xl" />}
+                </label>
+              </div>
+            </div>
+
+            {/* Delivery Instructions */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8">
+              <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                <span className="bg-orange-100 p-2 rounded-lg text-orange-500"><FiTruck size={20} /></span>
+                Delivery Instructions <span className="text-sm font-normal text-gray-400">(Optional)</span>
+              </h2>
+              <textarea 
+                {...register('instructions')} 
+                rows={3} 
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all bg-gray-50 focus:bg-white resize-none" 
+                placeholder="e.g., Please leave at the front door, call when you arrive..." 
+              />
+            </div>
           </div>
+
+          {/* Right Column: Order Summary (Sticky) */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 sm:p-8 sticky top-24">
+              <h2 className="text-xl font-bold text-gray-900 mb-6">Order Summary</h2>
+              
+              <div className="space-y-4 text-sm text-gray-600 border-b border-gray-100 pb-6">
+                <div className="flex justify-between items-center">
+                  <span>Subtotal ({cartItems.length} items)</span>
+                  <span className="font-medium text-gray-900">${subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>Delivery Fee</span>
+                  <span className="font-medium text-gray-900">${deliveryFee.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>Tax (10%)</span>
+                  <span className="font-medium text-gray-900">${tax.toFixed(2)}</span>
+                </div>
+              </div>
+              
+              <div className="pt-6 mb-8">
+                <div className="flex justify-between items-end">
+                  <span className="text-base font-bold text-gray-900">Total</span>
+                  <span className="text-3xl font-extrabold text-orange-500">${total.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <Button type="submit" disabled={isSubmitting} className="w-full py-4 text-lg rounded-xl shadow-lg hover:shadow-xl transition-all">
+                {isSubmitting ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    Processing...
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2">
+                    <FiLock /> Place Order
+                  </div>
+                )}
+              </Button>
+              
+              <div className="mt-6 flex items-center justify-center gap-2 text-xs text-gray-500">
+                <FiShield className="text-green-500" /> Secure Checkout
+              </div>
+            </div>
+          </div>
+
         </form>
       </div>
     </div>
