@@ -115,17 +115,13 @@ const Checkout = () => {
       const order = await createNewOrder(orderData)
 
       if (order && paymentMethod === 'KHQR') {
+        // Calls your backend to get the Bakong QR string
         const response = await axios.post('/payments/aba-payway', {
           orderId: order._id,
           amount: total,
         })
 
-        if (response.data.checkoutUrl) {
-          window.location.href = response.data.checkoutUrl;
-          return;
-        }
-
-        const qrString = response.data.qrData || response.data.qrImage
+        const qrString = response.data.qrData
         if (qrString) {
           setQrData(qrString)
           setPaymentId(response.data.paymentId)
@@ -135,7 +131,7 @@ const Checkout = () => {
           setShowQR(true)
           setTimeout(() => { clearCart() }, 1000)
         } else {
-          toast.error('No payment URL received from server')
+          toast.error('No QR code received from server')
           setIsSubmitting(false)
         }
       } else if (order) {
@@ -202,20 +198,11 @@ const Checkout = () => {
               <QRCode value={qrData} size={200} className="w-full max-w-[200px] h-auto" />
             </div>
 
-                      {/* ✅ Official Bakong & ABA Deep Links */}
-            <div className="space-y-3 mb-6">
-              <a 
-                href={`aba://pay?qr=${encodeURIComponent(qrData)}`}
-                className="flex items-center justify-center gap-2 w-full bg-[#005A9C] text-white py-3 rounded-xl font-bold hover:bg-[#004a80] transition-all shadow-md"
-              >
-                <FiSmartphone size={20} /> Pay with ABA Mobile
-              </a>
-              <a 
-                href={`bakong://pay?qr=${encodeURIComponent(qrData)}`}
-                className="flex items-center justify-center gap-2 w-full bg-[#E31B23] text-white py-3 rounded-xl font-bold hover:bg-[#c4161d] transition-all shadow-md"
-              >
-                <FiSmartphone size={20} /> Pay with Bakong
-              </a>
+            {/* ✅ Clear Instruction to scan */}
+            <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 mb-6">
+              <p className="text-sm text-orange-800 font-medium">
+                Please open your <strong>ABA Mobile</strong> or <strong>Bakong App</strong>, tap the <strong>Scan QR</strong> button, and scan the code above to complete your payment.
+              </p>
             </div>
 
             <div className="flex items-center justify-center gap-2 text-gray-500 text-xs font-medium mb-6">
