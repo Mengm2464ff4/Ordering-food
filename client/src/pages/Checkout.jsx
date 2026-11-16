@@ -6,7 +6,10 @@ import toast from 'react-hot-toast'
 import { AuthContext } from '../context/AuthContext'
 import { CartContext } from '../context/CartContext'
 import { OrderContext } from '../context/OrderContext'
-import { FiMapPin, FiPhone, FiUser, FiMail, FiCreditCard, FiTruck, FiCheckCircle, FiLock, FiShield } from 'react-icons/fi'
+import { 
+  FiMapPin, FiPhone, FiUser, FiMail, FiCreditCard, FiTruck, 
+  FiCheckCircle, FiLock, FiShield, FiClock, FiSmartphone 
+} from 'react-icons/fi'
 import QRCode from 'react-qr-code'
 import Button from '../components/common/Button'
 import Input from '../components/common/Input'
@@ -24,6 +27,9 @@ const Checkout = () => {
   const [paymentId, setPaymentId] = useState(null)
   const [orderId, setOrderId] = useState(null)
   const [finalTotal, setFinalTotal] = useState(0)
+
+  // ✅ Timer State (3 minutes = 180 seconds)
+  const [timeLeft, setTimeLeft] = useState(180)
 
   const { register, handleSubmit, setValue, formState: { errors } } = useForm()
 
@@ -49,6 +55,28 @@ const Checkout = () => {
   const deliveryFee = getDeliveryFee()
   const tax = getTaxAmount()
   const total = getCartTotal()
+
+  // ✅ Countdown Timer Logic
+  useEffect(() => {
+    let timer
+    if (showQR && timeLeft > 0) {
+      timer = setInterval(() => {
+        setTimeLeft((prev) => prev - 1)
+      }, 1000)
+    } else if (timeLeft === 0) {
+      toast.error('QR Code expired! Please try again.')
+      setShowQR(false)
+      navigate('/cart')
+    }
+    return () => clearInterval(timer)
+  }, [showQR, timeLeft, navigate])
+
+  // Format time (e.g., 03:00)
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0')
+    const s = (seconds % 60).toString().padStart(2, '0')
+    return `${m}:${s}`
+  }
 
   const onSubmit = async (data) => {
     setIsSubmitting(true)
@@ -103,6 +131,7 @@ const Checkout = () => {
           setPaymentId(response.data.paymentId)
           setOrderId(order._id)
           setFinalTotal(total)
+          setTimeLeft(180) // Reset timer to 3 mins
           setShowQR(true)
           setTimeout(() => { clearCart() }, 1000)
         } else {
@@ -124,7 +153,7 @@ const Checkout = () => {
   // Polling for payment status
   useEffect(() => {
     let interval
-    if (showQR && paymentId) {
+    if (showQR && paymentId && timeLeft > 0) {
       interval = setInterval(async () => {
         try {
           const response = await axios.post('/payments/verify', { paymentId })
@@ -139,40 +168,67 @@ const Checkout = () => {
       }, 3000)
     }
     return () => clearInterval(interval)
-  }, [showQR, paymentId, orderId, navigate])
+  }, [showQR, paymentId, orderId, navigate, timeLeft])
 
   // ==================== QR CODE SCREEN ====================
   if (showQR) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center py-12 px-4">
-        <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 text-center relative overflow-hidden">
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center py-8 px-4">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-6 sm:p-8 text-center relative overflow-hidden">
           
-          {/* Decorative background circle */}
           <div className="absolute -top-10 -right-10 w-32 h-32 bg-orange-100 rounded-full opacity-50"></div>
 
           <div className="relative z-10">
-            <h2 className="text-3xl font-extrabold text-gray-900 mb-2">Scan to Pay</h2>
-            <p className="text-gray-500 mb-6 font-medium">Open ABA Mobile or Bakong App</p>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-1">Scan to Pay</h2>
+            <p className="text-gray-500 mb-4 text-sm sm:text-base font-medium">Open ABA Mobile or Bakong App</p>
 
-            <div className="bg-blue-50 rounded-2xl p-6 mb-8 border border-blue-100">
-              <p className="text-sm text-blue-600 font-semibold mb-1 uppercase tracking-wide">Total Amount</p>
-              <p className="text-5xl font-extrabold text-blue-700">${finalTotal.toFixed(2)}</p>
+            {/* ✅ 3-Minute Timer */}
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <span className={`px-4 py-1.5 rounded-full text-sm font-bold flex items-center gap-2 border ${
+                timeLeft < 30 
+                  ? 'bg-red-50 text-red-600 border-red-200 animate-pulse' 
+                  : 'bg-blue-50 text-blue-600 border-blue-200'
+              }`}>
+                <FiClock /> Time remaining: {formatTime(timeLeft)}
+              </span>
             </div>
 
-            <div className="bg-white p-5 rounded-3xl border-2 border-orange-100 shadow-sm mb-8 inline-block">
-              <QRCode value={qrData} size={240} />
+            <div className="bg-blue-50 rounded-2xl p-4 mb-6 border border-blue-100">
+              <p className="text-xs text-blue-600 font-semibold mb-1 uppercase tracking-wide">Total Amount</p>
+              <p className="text-3xl sm:text-4xl font-extrabold text-blue-700">${finalTotal.toFixed(2)}</p>
             </div>
 
-            <div className="flex items-center justify-center gap-3 text-gray-600 font-medium mb-8 bg-gray-50 py-3 rounded-full">
-              <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+            <div className="bg-white p-3 sm:p-4 rounded-2xl border-2 border-orange-100 shadow-sm mb-6 inline-block">
+              <QRCode value={qrData} size={200} className="w-full max-w-[200px] h-auto" />
+            </div>
+
+            {/* ✅ Direct App Payment Buttons */}
+            <div className="space-y-3 mb-6">
+              <a 
+                href={`abamobilebank://ababank.com?type=payway&qrcode=${encodeURIComponent(qrData)}`}
+                className="flex items-center justify-center gap-2 w-full bg-[#005A9C] text-white py-3 rounded-xl font-bold hover:bg-[#004a80] transition-all shadow-md"
+              >
+                <FiSmartphone size={20} /> Pay with ABA Mobile
+              </a>
+              <a 
+                href={`bakong://pay?qrcode=${encodeURIComponent(qrData)}`}
+                className="flex items-center justify-center gap-2 w-full bg-[#E31B23] text-white py-3 rounded-xl font-bold hover:bg-[#c4161d] transition-all shadow-md"
+              >
+                <FiSmartphone size={20} /> Pay with Bakong
+              </a>
+            </div>
+
+            <div className="flex items-center justify-center gap-2 text-gray-500 text-xs font-medium mb-6">
+              <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
               <span>Waiting for payment confirmation...</span>
             </div>
 
             <Button
               onClick={() => navigate('/profile')}
-              className="w-full py-4 text-lg rounded-xl shadow-lg hover:shadow-xl transition-all"
+              variant="outline"
+              className="w-full py-3 rounded-xl border-gray-200 text-gray-600"
             >
-              I have paid / Go to Profile
+              Cancel & Go Back
             </Button>
           </div>
         </div>
@@ -233,7 +289,6 @@ const Checkout = () => {
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 
-                {/* KHQR Option */}
                 <label className={`relative flex cursor-pointer rounded-xl border p-4 shadow-sm focus:outline-none transition-all ${paymentMethod === 'KHQR' ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'border-gray-200 bg-white hover:bg-gray-50'}`}>
                   <input type="radio" value="KHQR" checked={paymentMethod === 'KHQR'} onChange={(e) => setPaymentMethod(e.target.value)} className="sr-only" />
                   <div className="flex flex-col">
@@ -243,7 +298,6 @@ const Checkout = () => {
                   {paymentMethod === 'KHQR' && <FiCheckCircle className="absolute top-4 right-4 text-orange-500 text-xl" />}
                 </label>
 
-                {/* Cash Option */}
                 <label className={`relative flex cursor-pointer rounded-xl border p-4 shadow-sm focus:outline-none transition-all ${paymentMethod === 'Cash' ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'border-gray-200 bg-white hover:bg-gray-50'}`}>
                   <input type="radio" value="Cash" checked={paymentMethod === 'Cash'} onChange={(e) => setPaymentMethod(e.target.value)} className="sr-only" />
                   <div className="flex flex-col">
