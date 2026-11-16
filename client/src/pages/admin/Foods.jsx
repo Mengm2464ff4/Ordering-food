@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'  // Changed
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getFoods, createFood, updateFood, deleteFood, toggleFoodAvailability } from '../../api/adminApi'
 import { generateImageUrl } from '../../utils/generateImageUrl'
 import axios from '../../api/axios'
@@ -8,7 +8,7 @@ import Button from '../../components/common/Button'
 import Modal from '../../components/common/Modal'
 import Input from '../../components/common/Input'
 import Select from '../../components/common/Select'
-import { FiPlus, FiUpload } from 'react-icons/fi'
+import { FiPlus, FiUpload, FiChevronLeft, FiChevronRight } from 'react-icons/fi'
 import toast from 'react-hot-toast'
 
 const Foods = () => {
@@ -28,11 +28,16 @@ const Foods = () => {
   } )
   const [ imagePreview, setImagePreview ] = useState( '' )
   const [ isSubmitting, setIsSubmitting ] = useState( false )
+  
+  // Pagination State
+  const [page, setPage] = useState(1)
+  const limit = 10 // Show 10 items per page
 
-  const { data: foodsData, isLoading, refetch } = useQuery( {
-    queryKey: [ 'adminFoods' ],
-    queryFn: () => getFoods( { limit: 100 } )
-  } )
+  const { data: foodsData, isLoading, refetch } = useQuery({
+    queryKey: ['adminFoods', page, limit], 
+    queryFn: () => getFoods({ page, limit }),
+    keepPreviousData: true, 
+  })
 
   const createMutation = useMutation( createFood, {
     onSuccess: () => {
@@ -172,7 +177,7 @@ const Foods = () => {
     setEditingFood( null )
   }
 
-   const categories = [
+  const categories = [
     'Khmer Food', 'Fast Food', 'Appetizer', 'Beverages', 'Noodles', 'Rice', 'Seafood', 'Desserts', 'Salads', 'Soups'
   ]
 
@@ -188,14 +193,49 @@ const Foods = () => {
         </Button>
       </div>
 
+      {/*Table with correct handleEdit */}
       <AdminFoodTable
         foods={foodsData?.foods}
         loading={isLoading}
+        onEditClick={handleEdit} 
         onEdit={( id, data ) => updateMutation.mutate( { id, data } )}
         onDelete={handleDelete}
         onAdd={( data ) => createMutation.mutate( data )}
         onToggleAvailability={handleToggleAvailability}
       />
+
+      {/*Pagination Controls (Moved OUTSIDE the Modal) */}
+      {foodsData && foodsData.pages > 1 && (
+        <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 mt-6 sticky bottom-4 z-10">
+          <button
+            onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+            disabled={page === 1}
+            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition ${
+              page === 1 
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                : 'bg-orange-50 text-orange-500 hover:bg-orange-100'
+            }`}
+          >
+            <FiChevronLeft /> Previous
+          </button>
+          
+          <span className="text-gray-600 font-medium">
+            Page <span className="text-orange-500 font-bold">{page}</span> of {foodsData.pages}
+          </span>
+          
+          <button
+            onClick={() => setPage((prev) => Math.min(prev + 1, foodsData.pages))}
+            disabled={page === foodsData.pages}
+            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition ${
+              page === foodsData.pages 
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                : 'bg-orange-50 text-orange-500 hover:bg-orange-100'
+            }`}
+          >
+            Next <FiChevronRight />
+          </button>
+        </div>
+      )}
 
       {/* Add/Edit Modal */}
       <Modal

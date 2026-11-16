@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'  // Changed
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getOrders, updateOrderStatus } from '../../api/adminApi'
 import AdminOrderTable from '../../components/admin/AdminOrderTable'
-import { FiFilter, FiDownload } from 'react-icons/fi'
+import { FiDownload, FiChevronLeft, FiChevronRight, FiFilter } from 'react-icons/fi'
 import Button from '../../components/common/Button'
 import toast from 'react-hot-toast'
 
@@ -10,17 +10,22 @@ const Orders = () => {
   const queryClient = useQueryClient()
   const [statusFilter, setStatusFilter] = useState('all')
   const [dateFilter, setDateFilter] = useState('')
+  
+  // Sticky Pagination State
+  const [page, setPage] = useState(1)
+  const limit = 10
 
   const { data: ordersData, isLoading, refetch } = useQuery({
-  queryKey: ['adminOrders', statusFilter, dateFilter],
-  queryFn: () => getOrders({ status: statusFilter, date: dateFilter })
-})
+    queryKey: ['adminOrders', statusFilter, dateFilter, page, limit],
+    queryFn: () => getOrders({ status: statusFilter, date: dateFilter, page, limit }),
+    keepPreviousData: true,
+  })
 
   const updateStatusMutation = useMutation(
     ({ id, status }) => updateOrderStatus(id, status),
     {
       onSuccess: () => {
-        queryClient.invalidateQueries('adminOrders')
+        queryClient.invalidateQueries(['adminOrders'])
         toast.success('Order status updated')
       },
       onError: (error) => {
@@ -60,10 +65,13 @@ const Orders = () => {
           <h1 className="text-2xl font-bold text-gray-900">Order Management</h1>
           <p className="text-gray-500 mt-1">View and manage all customer orders</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value)
+              setPage(1) // Reset to page 1 on filter change
+            }}
             className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
           >
             <option value="all">All Status</option>
@@ -77,7 +85,10 @@ const Orders = () => {
           <input
             type="date"
             value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
+            onChange={(e) => {
+              setDateFilter(e.target.value)
+              setPage(1) // Reset to page 1 on filter change
+            }}
             className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
           />
           <Button onClick={handleExportOrders} variant="outline" className="flex items-center gap-2">
@@ -95,7 +106,7 @@ const Orders = () => {
       {/* Order Statistics Summary */}
       {ordersData?.orders && (
         <div className="bg-white rounded-xl shadow-md p-6">
-          <h3 className="text-lg font-bold mb-4">Order Statistics</h3>
+          <h3 className="text-lg font-bold mb-4">Order Statistics (Current Page)</h3>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div className="bg-blue-100 p-4 rounded-lg text-center">
               <p className="text-2xl font-bold">{ordersData.total || 0}</p>
@@ -118,6 +129,39 @@ const Orders = () => {
               <p className="text-sm">Revenue</p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Sticky Pagination Controls */}
+      {ordersData && ordersData.pages > 1 && (
+        <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 mt-6 sticky bottom-4 z-10">
+          <button
+            onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+            disabled={page === 1}
+            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition ${
+              page === 1 
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                : 'bg-orange-50 text-orange-500 hover:bg-orange-100'
+            }`}
+          >
+            <FiChevronLeft /> Previous
+          </button>
+          
+          <span className="text-gray-600 font-medium">
+            Page <span className="text-orange-500 font-bold">{page}</span> of {ordersData.pages}
+          </span>
+          
+          <button
+            onClick={() => setPage((prev) => Math.min(prev + 1, ordersData.pages))}
+            disabled={page === ordersData.pages}
+            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition ${
+              page === ordersData.pages 
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                : 'bg-orange-50 text-orange-500 hover:bg-orange-100'
+            }`}
+          >
+            Next <FiChevronRight />
+          </button>
         </div>
       )}
     </div>

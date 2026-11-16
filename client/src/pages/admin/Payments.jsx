@@ -1,8 +1,8 @@
-import React, { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'  // Changed
+import React, { useState, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { getPayments } from '../../api/adminApi'
 import AdminPaymentTable from '../../components/admin/AdminPaymentTable'
-import { FiDownload, FiDollarSign, FiTrendingUp, FiTrendingDown } from 'react-icons/fi'
+import { FiDownload, FiDollarSign, FiTrendingUp, FiTrendingDown, FiChevronLeft, FiChevronRight } from 'react-icons/fi'
 import Button from '../../components/common/Button'
 import Loader from '../../components/common/Loader'
 import toast from 'react-hot-toast'
@@ -11,13 +11,30 @@ const Payments = () => {
   const [statusFilter, setStatusFilter] = useState('all')
   const [methodFilter, setMethodFilter] = useState('all')
   
- const { data: paymentsData, isLoading, refetch } = useQuery({
-  queryKey: ['adminPayments', statusFilter, methodFilter],
-  queryFn: () => getPayments({ status: statusFilter, method: methodFilter })
-})
+  // Pagination State
+  const [page, setPage] = useState(1)
+  const limit = 10
+
+  const { data: paymentsData, isLoading, refetch } = useQuery({
+    queryKey: ['adminPayments', statusFilter, methodFilter],
+    queryFn: () => getPayments({ status: statusFilter, method: methodFilter })
+  })
+
+  // Frontend Pagination Logic
+  const filteredPayments = useMemo(() => {
+    const payments = paymentsData?.payments || []
+    return payments.filter(payment => {
+      const matchStatus = statusFilter === 'all' || payment.status === statusFilter
+      const matchMethod = methodFilter === 'all' || payment.method === methodFilter
+      return matchStatus && matchMethod
+    })
+  }, [paymentsData, statusFilter, methodFilter])
+
+  const totalPages = Math.ceil(filteredPayments.length / limit)
+  const paginatedPayments = filteredPayments.slice((page - 1) * limit, page * limit)
 
   const handleExportPayments = () => {
-    const payments = paymentsData?.payments || []
+    const payments = filteredPayments || []
     const headers = ['Payment ID', 'Order ID', 'Customer', 'Amount', 'Method', 'Status', 'Date']
     const csvData = payments.map(payment => [
       payment._id,
@@ -40,26 +57,30 @@ const Payments = () => {
     toast.success('Payments exported')
   }
 
-  // Calculate summary stats
-  const completedPayments = paymentsData?.payments?.filter(p => p.status === 'completed') || []
+  // Calculate summary stats (Based on ALL filtered payments, not just current page)
+  const completedPayments = filteredPayments.filter(p => p.status === 'completed')
   const totalRevenue = completedPayments.reduce((sum, p) => sum + p.amount, 0)
-  const khqrPayments = paymentsData?.payments?.filter(p => p.method === 'KHQR').length || 0
-  const cashPayments = paymentsData?.payments?.filter(p => p.method === 'Cash').length || 0
+  const khqrPayments = filteredPayments.filter(p => p.method === 'KHQR').length
+  const cashPayments = filteredPayments.filter(p => p.method === 'Cash').length
 
   if (isLoading) return <Loader />
 
   return (
     <div className="space-y-6">
+      {/* Header & Filters */}
       <div className="flex flex-wrap justify-between items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Payment Management</h1>
           <p className="text-gray-500 mt-1">Track and manage all payment transactions</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+            onChange={(e) => {
+              setStatusFilter(e.target.value)
+              setPage(1) // Reset to page 1 on filter change
+            }}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
           >
             <option value="all">All Status</option>
             <option value="pending">Pending</option>
@@ -69,8 +90,11 @@ const Payments = () => {
           </select>
           <select
             value={methodFilter}
-            onChange={(e) => setMethodFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+            onChange={(e) => {
+              setMethodFilter(e.target.value)
+              setPage(1) // Reset to page 1 on filter change
+            }}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
           >
             <option value="all">All Methods</option>
             <option value="KHQR">KHQR</option>
@@ -93,7 +117,7 @@ const Payments = () => {
         />
         <SummaryCard
           title="Total Transactions"
-          value={paymentsData?.payments?.length || 0}
+          value={filteredPayments.length || 0}
           icon={<FiTrendingUp className="text-2xl" />}
           trend="+8.2%"
           color="bg-blue-500"
@@ -112,25 +136,59 @@ const Payments = () => {
         />
       </div>
 
-      <AdminPaymentTable payments={paymentsData?.payments} loading={isLoading} />
+      {/* Table */}
+      <AdminPaymentTable payments={paginatedPayments} loading={isLoading} />
+
+      {/* Sticky Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 mt-6 sticky bottom-4 z-10">
+          <button
+            onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+            disabled={page === 1}
+            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition ${
+              page === 1 
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                : 'bg-orange-50 text-orange-500 hover:bg-orange-100'
+            }`}
+          >
+            <FiChevronLeft /> Previous
+          </button>
+          
+          <span className="text-gray-600 font-medium">
+            Page <span className="text-orange-500 font-bold">{page}</span> of {totalPages}
+          </span>
+          
+          <button
+            onClick={() => setPage((prev) => Math.min(prev + 1, totalPages))}
+            disabled={page === totalPages}
+            className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition ${
+              page === totalPages 
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                : 'bg-orange-50 text-orange-500 hover:bg-orange-100'
+            }`}
+          >
+            Next <FiChevronRight />
+          </button>
+        </div>
+      )}
     </div>
   )
 }
 
 const SummaryCard = ({ title, value, icon, trend, color }) => {
   return (
-    <div className="bg-white rounded-xl shadow-md p-6">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
       <div className="flex items-center justify-between mb-3">
         <div className={`${color} w-12 h-12 rounded-lg flex items-center justify-center text-white`}>
           {icon}
         </div>
         {trend && (
-          <span className="text-green-500 text-sm flex items-center gap-1">
+          <span className="text-green-500 text-sm flex items-center gap-1 font-medium">
             <FiTrendingUp /> {trend}
           </span>
         )}
       </div>
-      <p className="text-gray-500 text-sm">{title}</p>
+      <p className="text-gray-500 text-sm font-medium">{title}</p>
       <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
     </div>
   )
