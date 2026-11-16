@@ -176,31 +176,70 @@ const createABAPayment = asyncHandler(async (req, res) => {
     throw new Error('Order not found') 
   }
 
+  const merchantId = process.env.PAYWAY_MERCHANT_ID
+  const apiKey = process.env.PAYWAY_API_KEY
+  const baseUrl = process.env.PAYWAY_API_URL || 'https://checkout.payway.com.kh'
+
   const tranId = orderId.toString().slice(-10) + Date.now().toString().slice(-8)
-  const formattedAmount = parseFloat(amount).toFixed(2)
+  const reqTime = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14)
 
-  // ✅ Use your official Payment Link and pass the amount!
-  const baseLink = 'https://link.payway.com.kh/ABAPAYm55533132'
-  const checkoutUrl = `${baseLink}?amount=${formattedAmount}&tran_id=${tranId}`
+  const paymentData = {
+    merchant_id: merchantId,
+    tran_id: tranId,
+    amount: parseFloat(amount).toFixed(2),
+    currency: 'USD',
+    req_time: reqTime,
+    payment_option: 'abapay_khqr', // ✅ QR API uses this
+  }
 
-  // Save to DB
-  const payment = await Payment.create({
-    order: orderId,
-    user: req.user._id,
-    amount: amount,
-    method: 'ABA_PAYWAY',
-    transactionId: tranId,
-    khqrData: { checkoutUrl: checkoutUrl },
-    status: 'pending',
-  })
+  // ✅ QR API uses a different hash order (only these 5 fields!)
+  const hashString = reqTime + merchantId + tranId + paymentData.amount + paymentData.currency
+  const hash = crypto.createHmac('sha512', apiKey).update(hashString).digest('base64')
 
-  return res.json({
-    paymentId: payment._id,
-    checkoutUrl: checkoutUrl, // Frontend will redirect here
-    transactionId: tranId,
-    amount: payment.amount,
-    status: payment.status,
-  })
+  const formData = new URLSearchParams()
+  for (const key in paymentData) {
+    formData.append(key, paymentData[key])
+  }
+  formData.append('hash', hash)
+
+  try {
+    const response = await axios.post(
+      `${baseUrl}/api/payment-gateway/v1/payments/generate-qr`,
+      formData.toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    )
+
+    console.log('👉 QR API RESPONSE:', response.data)
+
+    const qrString = response.data.qr_string
+
+    if (!qrString) {
+      throw new Error('No QR string returned from ABA')
+    }
+
+    const payment = await Payment.create({
+      order: orderId,
+      user: req.user._id,
+      amount: amount,
+      method: 'ABA_PAYWAY',
+      transactionId: tranId,
+      khqrData: { qrString: qrString },
+      status: 'pending',
+    })
+
+    return res.json({
+      paymentId: payment._id,
+      qrData: qrString, 
+      transactionId: tranId,
+      amount: payment.amount,
+      status: payment.status,
+    })
+
+  } catch (error) {
+    console.error('ABA QR API Error:', error.response?.data || error.message)
+    res.status(500)
+    throw new Error(error.response?.data?.status?.message || 'Failed to generate QR code')
+  }
 })
 
 const abaCallback = asyncHandler(async (req, res) => {
