@@ -200,7 +200,7 @@ const createABAPayment = asyncHandler(async (req, res) => {
     throw new Error('Amount does not match order total')
   }
 
-  const bakongAccount = process.env.BAKONG_ACCOUNT || '0963193606@abaa'
+  const bakongAccount = process.env.BAKONG_ACCOUNT || 'abaakhppxxx@abaa'
   const merchantName = process.env.BAKONG_MERCHANT_NAME || 'VUTHY VUTHA'
   const merchantCity = process.env.BAKONG_MERCHANT_CITY || 'Phnom Penh'
 
@@ -235,7 +235,7 @@ const createABAPayment = asyncHandler(async (req, res) => {
     const qrString = qrResponse.data.qr
 
     // ✅ FIX: compute deepLink from qrString (was undefined before)
-    const deepLink = `bakong://khqr?data=${encodeURIComponent(qrString)}`
+    const deepLink = `https://bakong.nbc.gov.kh/khqr?data=${encodeURIComponent(qrString)}`
 
     const payment = await Payment.create({
       order: orderId,
