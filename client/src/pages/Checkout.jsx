@@ -81,26 +81,51 @@ const Checkout = () => {
     return `${m}:${s}`
   }
 
-  // ✅ Function to Download QR to Gallery (For ABA Mobile)
-  const downloadQR = () => {
-    const svg = qrRef.current.querySelector('svg')
-    const svgData = new XMLSerializer().serializeToString(svg)
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
-    const img = new Image()
-    img.onload = () => {
-      canvas.width = img.width
-      canvas.height = img.height
-      ctx.fillStyle = 'white'
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-      ctx.drawImage(img, 0, 0)
-      const pngFile = canvas.toDataURL('image/png')
-      const downloadLink = document.createElement('a')
-      downloadLink.download = `KHQR-Order-${orderId}.png`
-      downloadLink.href = `${pngFile}`
-      downloadLink.click()
+  // ✅ Function to Download QR to Gallery (Native Share)
+  const downloadQR = async () => {
+    try {
+      const svg = qrRef.current.querySelector('svg')
+      const svgData = new XMLSerializer().serializeToString(svg)
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      const img = new Image()
+      
+      img.onload = async () => {
+        canvas.width = img.width
+        canvas.height = img.height
+        ctx.fillStyle = 'white'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.drawImage(img, 0, 0)
+        
+        // Convert to blob
+        canvas.toBlob(async (blob) => {
+          const file = new File([blob], `KHQR-${orderId}.png`, { type: 'image/png' })
+          
+          // ✅ Use Web Share API if available (Native Mobile Share Menu)
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+              await navigator.share({
+                files: [file],
+                title: 'Scan to Pay',
+                text: 'Open your banking app to scan this QR code.'
+              })
+            } catch (error) {
+              console.log('Share canceled', error)
+            }
+          } else {
+            // Fallback for desktop: standard download
+            const pngFile = canvas.toDataURL('image/png')
+            const downloadLink = document.createElement('a')
+            downloadLink.download = `KHQR-Order-${orderId}.png`
+            downloadLink.href = pngFile
+            downloadLink.click()
+          }
+        }, 'image/png')
+      }
+      img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgData)))}`
+    } catch (err) {
+      toast.error('Failed to save QR code')
     }
-    img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgData)))}`
   }
 
   const onSubmit = async (data) => {
@@ -191,7 +216,6 @@ const Checkout = () => {
   }, [showQR, paymentId, orderId, navigate, timeLeft])
 
   // ==================== QR CODE SCREEN ====================
-
   if (showQR) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center py-8 px-4">
@@ -203,7 +227,6 @@ const Checkout = () => {
             <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-1">Scan to Pay</h2>
             <p className="text-gray-500 mb-4 text-sm sm:text-base font-medium">Open ABA Mobile or Bakong App</p>
 
-            {/* 3-Minute Timer */}
             <div className="flex items-center justify-center gap-2 mb-4">
               <span className={`px-4 py-1.5 rounded-full text-sm font-bold flex items-center gap-2 border ${
                 timeLeft < 30 
@@ -223,20 +246,29 @@ const Checkout = () => {
               <QRCode value={qrData} size={200} className="w-full max-w-[200px] h-auto" />
             </div>
 
-            {/* ✅ Only the Save button */}
-            <button
-              onClick={downloadQR}
-              className="flex items-center justify-center gap-2 w-full bg-[#005A9C] text-white py-3 rounded-xl font-bold hover:bg-[#004a80] transition-all shadow-md mb-4"
-            >
-              <FiDownload size={20} /> Save QR to Phone
-            </button>
+            <div className="space-y-3 mb-6">
+              {/* ✅ Direct Bakong App Button */}
+              <a 
+                href={`bakong://pay?qrcode=${encodeURIComponent(qrData)}`}
+                className="flex items-center justify-center gap-2 w-full bg-[#E31B23] text-white py-3 rounded-xl font-bold hover:bg-[#c4161d] transition-all shadow-md"
+              >
+                <FiSmartphone size={20} /> Pay with Bakong App
+              </a>
+
+              {/* ✅ Native Share to save to gallery */}
+              <button
+                onClick={downloadQR}
+                className="flex items-center justify-center gap-2 w-full bg-[#005A9C] text-white py-3 rounded-xl font-bold hover:bg-[#004a80] transition-all shadow-md"
+              >
+                <FiDownload size={20} /> Save QR to Phone
+              </button>
+            </div>
 
             <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 mb-6 text-left">
               <p className="text-sm text-orange-800 font-medium">
                 <strong>How to pay:</strong><br/>
-                1. Click <strong>Save QR to Phone</strong> above.<br/>
-                2. Open your <strong>ABA Mobile</strong> or <strong>Bakong</strong> app.<br/>
-                3. Tap <strong>Scan QR</strong>, then select <strong>Upload from Gallery</strong> to pick the saved image.
+                • <strong>Bakong Users:</strong> Click the red button.<br/>
+                • <strong>ABA Users:</strong> Click the blue button to save the QR, then open ABA Mobile and select it from your photo gallery.
               </p>
             </div>
 
@@ -257,6 +289,7 @@ const Checkout = () => {
       </div>
     )
   }
+
   // ==================== MAIN CHECKOUT FORM ====================
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4 sm:px-6 lg:px-8">
