@@ -185,7 +185,7 @@ const createABAPayment = asyncHandler(async (req, res) => {
   const expirationTimestamp = Date.now() + 15 * 60 * 1000 
 
   try {
-    const { BakongKHQR, khqrData, IndividualInfo } = require('bakong-khqr')
+    const { BakongKHQR, khqrData, IndividualInfo, SourceInfo } = require('bakong-khqr')
     
     const optionalData = {
       currency: khqrData.currency.usd,
@@ -211,20 +211,38 @@ const createABAPayment = asyncHandler(async (req, res) => {
 
     const qrString = qrResponse.data.qr
 
+    // ✅ GENERATE THE DEEP LINK USING THE PACKAGE'S BUILT-IN METHOD
+    const sourceInfo = new SourceInfo(
+      'https://ordering-food-tawny.vercel.app/logo.png', // Your logo
+      'FoodOrder', // Your app name
+      'https://ordering-food-tawny.vercel.app' // Your website
+    );
+    
+    // Use the static method from the package
+    const deepLinkResponse = await BakongKHQR.generateDeepLink(
+      qrString, 
+      sourceInfo
+    );
+    
+    // The short link is inside the response
+    const shortLink = deepLinkResponse.data.shortLink;
+
+    // Save to database
     const payment = await Payment.create({
       order: orderId,
       user: req.user._id,
       amount: amount,
       method: 'ABA_PAYWAY',
       transactionId: tranId,
-      khqrData: { qrString: qrString },
+      khqrData: { qrString: qrString, deeplink: shortLink },
       status: 'pending',
     })
 
-    // ✅ THIS IS THE SECRET: We return the QR string AND the deep link!
+    // ✅ Return BOTH the QR string and the deep link
     return res.json({
       paymentId: payment._id,
       qrData: qrString, 
+      deeplink: shortLink, 
       transactionId: tranId,
       amount: payment.amount,
       status: payment.status,
