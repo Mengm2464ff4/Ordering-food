@@ -7,14 +7,14 @@ const { khqrService } = require('../services/khqrService')
 const asyncHandler = require('express-async-handler')
 const { BakongKHQR, khqrData, IndividualInfo } = require('bakong-khqr')
 
-// Hash for check-transaction API: concatenate merchant_id + tran_id
+// Hash for check-transaction API: HMAC-SHA512 of sorted key=value pairs, base64
 const createABAHash = (data, apiKey) => {
   const sortedKeys = Object.keys(data).sort()
-  const str = sortedKeys.map(key => `${key}=${data[key]}`).join('&')
+  const str = sortedKeys.map((key) => `${key}=${data[key]}`).join('&')
   return crypto.createHmac('sha512', apiKey).update(str).digest('base64')
 }
 
-// Hash specifically for Purchase API
+// Hash specifically for Purchase API (kept for future use)
 const createPurchaseHash = (data, apiKey) => {
   const b4hash =
     (data.req_time || '') +
@@ -56,11 +56,17 @@ const createKHQRPayment = asyncHandler(async (req, res) => {
     throw new Error('Order not found')
   }
 
+  // ✅ Validate amount matches order total
+  if (Number(amount) !== Number(order.totalPrice)) {
+    res.status(400)
+    throw new Error('Amount does not match order total')
+  }
+
   const existingPayment = await Payment.findOne({ order: orderId, status: 'pending' })
   if (existingPayment) {
     return res.json({
       paymentId: existingPayment._id,
-      qrData: existingPayment.khqrData?.qrData,
+      qrData: existingPayment.khqrData?.qrData || existingPayment.khqrData?.qrString,
       md5: existingPayment.khqrData?.md5,
       amount: existingPayment.amount,
       status: existingPayment.status,
@@ -79,11 +85,15 @@ const createKHQRPayment = asyncHandler(async (req, res) => {
     throw new Error(error.message || 'Failed to generate KHQR payment code')
   }
 
+  // ✅ KHQR payments need a transactionId so verifyPayment can hash properly
+  const tranId = `KHQR_${Date.now()}_${String(orderId).slice(-6)}`
+
   const payment = await Payment.create({
     order: orderId,
-    user: req.user._id,
+    user: order.user || req.user._id,
     amount: amount,
     method: 'KHQR',
+    transactionId: tranId, // ✅ NEW
     khqrData: khqrDataRes,
     status: 'pending',
   })
@@ -109,7 +119,11 @@ const verifyPayment = asyncHandler(async (req, res) => {
       return res.status(404).json({ status: 'error', message: 'Payment not found' })
     }
 
-    if (payment.transactionId?.startsWith('MOCK_')) {
+    // ✅ Mock path — only in non-production
+    if (
+      process.env.NODE_ENV !== 'production' &&
+      payment.transactionId?.startsWith('MOCK_')
+    ) {
       payment.status = 'completed'
       payment.paidAt = Date.now()
       await payment.save()
@@ -131,6 +145,10 @@ const verifyPayment = asyncHandler(async (req, res) => {
       return res.json({ status: 'pending', paid: false })
     }
 
+    if (!payment.transactionId) {
+      return res.json({ status: 'pending', paid: false })
+    }
+
     const statusData = {
       merchant_id: merchantId,
       tran_id: payment.transactionId,
@@ -144,7 +162,7 @@ const verifyPayment = asyncHandler(async (req, res) => {
       )
 
       const { status } = response.data
-      if (status?.code === 0 || status === 0 || status?.code === "00") {
+      if (status?.code === 0 || status === 0 || status?.code === '00') {
         payment.status = 'completed'
         payment.paidAt = Date.now()
         await payment.save()
@@ -171,28 +189,34 @@ const verifyPayment = asyncHandler(async (req, res) => {
 const createABAPayment = asyncHandler(async (req, res) => {
   const { orderId, amount } = req.body
   const order = await Order.findById(orderId)
-  if (!order) { 
+  if (!order) {
     res.status(404)
-    throw new Error('Order not found') 
+    throw new Error('Order not found')
   }
 
-  const bakongAccount = 'abaakhppxxx@abaa' 
+  // ✅ Validate amount matches order total
+  if (Number(amount) !== Number(order.totalPrice)) {
+    res.status(400)
+    throw new Error('Amount does not match order total')
+  }
+
+  const bakongAccount = process.env.BAKONG_ACCOUNT || '0963193606@abaa'
   const merchantName = process.env.BAKONG_MERCHANT_NAME || 'VUTHY VUTHA'
   const merchantCity = process.env.BAKONG_MERCHANT_CITY || 'Phnom Penh'
 
   const tranId = orderId.toString().slice(-10) + Date.now().toString().slice(-8)
   const formattedAmount = parseFloat(amount).toFixed(2)
-  const expirationTimestamp = Date.now() + 15 * 60 * 1000 
+  const expirationTimestamp = Date.now() + 15 * 60 * 1000
 
   try {
-    const { BakongKHQR, khqrData, IndividualInfo, SourceInfo } = require('bakong-khqr')
-    
+    const { BakongKHQR, khqrData, IndividualInfo } = require('bakong-khqr')
+
     const optionalData = {
       currency: khqrData.currency.usd,
       amount: formattedAmount,
       billNumber: tranId,
       expirationTimestamp: expirationTimestamp,
-      storeLabel: process.env.PAYWAY_MERCHANT_ID || 'ec478717', 
+      storeLabel: process.env.PAYWAY_MERCHANT_ID || 'ec478717',
     }
 
     const individualInfo = new IndividualInfo(
@@ -201,7 +225,6 @@ const createABAPayment = asyncHandler(async (req, res) => {
       merchantCity,
       optionalData
     )
-
     const khqr = new BakongKHQR()
     const qrResponse = khqr.generateIndividual(individualInfo)
 
@@ -211,38 +234,24 @@ const createABAPayment = asyncHandler(async (req, res) => {
 
     const qrString = qrResponse.data.qr
 
-    // ✅ GENERATE THE DEEP LINK USING THE PACKAGE'S BUILT-IN METHOD
-    const sourceInfo = new SourceInfo(
-      'https://ordering-food-tawny.vercel.app/logo.png', // Your logo
-      'FoodOrder', // Your app name
-      'https://ordering-food-tawny.vercel.app' // Your website
-    );
-    
-    // Use the static method from the package
-    const deepLinkResponse = await BakongKHQR.generateDeepLink(
-      qrString, 
-      sourceInfo
-    );
-    
-    // The short link is inside the response
-    const shortLink = deepLinkResponse.data.shortLink;
+    // ✅ FIX: compute deepLink from qrString (was undefined before)
+    const deepLink = `bakong://khqr?data=${encodeURIComponent(qrString)}`
 
-    // Save to database
     const payment = await Payment.create({
       order: orderId,
-      user: req.user._id,
+      user: order.user || req.user._id,
       amount: amount,
       method: 'ABA_PAYWAY',
       transactionId: tranId,
-      khqrData: { qrString: qrString, deeplink: shortLink },
+      // ✅ Unify shape so reads are consistent
+      khqrData: { qrData: qrString, md5: qrResponse.data.md5 || null },
       status: 'pending',
     })
 
-    // ✅ Return BOTH the QR string and the deep link
     return res.json({
       paymentId: payment._id,
-      qrData: qrString, 
-      deeplink: shortLink, 
+      qrData: qrString,
+      deepLink, // ✅ now defined
       transactionId: tranId,
       amount: payment.amount,
       status: payment.status,
@@ -255,12 +264,26 @@ const createABAPayment = asyncHandler(async (req, res) => {
 })
 
 const abaCallback = asyncHandler(async (req, res) => {
-  const { tran_id, status, apv } = req.body
+  const { tran_id, status, apv, hash } = req.body
 
   try {
     const payment = await Payment.findOne({ transactionId: tran_id })
     if (!payment) {
       return res.status(404).json({ message: 'Payment not found' })
+    }
+
+    // ✅ Verify callback hash (skip only if no hash provided in dev)
+    const apiKey = process.env.PAYWAY_API_KEY
+    if (apiKey && hash) {
+      const payload = { ...req.body }
+      delete payload.hash
+      const expected = createABAHash(payload, apiKey)
+      if (hash !== expected) {
+        console.warn('ABA callback hash mismatch — possible spoofing attempt')
+        return res.status(400).json({ message: 'Invalid signature' })
+      }
+    } else if (process.env.NODE_ENV === 'production' && !hash) {
+      return res.status(400).json({ message: 'Missing signature' })
     }
 
     if (status === '0' || status === 0) {
@@ -325,9 +348,14 @@ const getPayments = asyncHandler(async (req, res) => {
 })
 
 const getPaymentHistory = asyncHandler(async (req, res) => {
+  // ✅ Add simple pagination
+  const page = parseInt(req.query.page) || 1
+  const limit = parseInt(req.query.limit) || 20
   const payments = await Payment.find({ user: req.user._id })
     .populate('order')
     .sort('-createdAt')
+    .limit(limit)
+    .skip((page - 1) * limit)
   res.json(payments)
 })
 
@@ -353,6 +381,9 @@ const refundPayment = asyncHandler(async (req, res) => {
     res.status(400)
     throw new Error('Only completed payments can be refunded')
   }
+
+  // ⚠️ NOTE: This only updates the DB. To actually refund money you must call
+  // the ABA PayWay refund API here. Otherwise your DB and bank are out of sync.
 
   payment.status = 'refunded'
   payment.refundReason = reason
