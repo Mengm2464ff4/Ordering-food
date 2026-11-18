@@ -191,6 +191,7 @@ const Checkout = () => {
   }, [showQR, paymentId, orderId, navigate, timeLeft])
 
   // ==================== QR CODE SCREEN ====================
+
   if (showQR) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center py-8 px-4">
@@ -202,6 +203,7 @@ const Checkout = () => {
             <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-1">Scan to Pay</h2>
             <p className="text-gray-500 mb-4 text-sm sm:text-base font-medium">Open ABA Mobile or Bakong App</p>
 
+            {/* 3-Minute Timer */}
             <div className="flex items-center justify-center gap-2 mb-4">
               <span className={`px-4 py-1.5 rounded-full text-sm font-bold flex items-center gap-2 border ${
                 timeLeft < 30 
@@ -221,28 +223,20 @@ const Checkout = () => {
               <QRCode value={qrData} size={200} className="w-full max-w-[200px] h-auto" />
             </div>
 
-            {/* ✅ Premium Action Buttons */}
-            <div className="space-y-3 mb-6">
-              <a 
-                href={`bakong://pay?qrcode=${encodeURIComponent(qrData)}`}
-                className="flex items-center justify-center gap-2 w-full bg-[#E31B23] text-white py-3 rounded-xl font-bold hover:bg-[#c4161d] transition-all shadow-md"
-              >
-                <FiSmartphone size={20} /> Pay with Bakong App
-              </a>
-              
-              <button
-                onClick={downloadQR}
-                className="flex items-center justify-center gap-2 w-full bg-[#005A9C] text-white py-3 rounded-xl font-bold hover:bg-[#004a80] transition-all shadow-md"
-              >
-                <FiDownload size={20} /> Save QR for ABA Mobile
-              </button>
-            </div>
+            {/* ✅ Only the Save button */}
+            <button
+              onClick={downloadQR}
+              className="flex items-center justify-center gap-2 w-full bg-[#005A9C] text-white py-3 rounded-xl font-bold hover:bg-[#004a80] transition-all shadow-md mb-4"
+            >
+              <FiDownload size={20} /> Save QR to Phone
+            </button>
 
             <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 mb-6 text-left">
               <p className="text-sm text-orange-800 font-medium">
                 <strong>How to pay:</strong><br/>
-                • <strong>Bakong Users:</strong> Click the red button.<br/>
-                • <strong>ABA Users:</strong> Click the blue button to save the QR, then open ABA Mobile and select it from your photo gallery.
+                1. Click <strong>Save QR to Phone</strong> above.<br/>
+                2. Open your <strong>ABA Mobile</strong> or <strong>Bakong</strong> app.<br/>
+                3. Tap <strong>Scan QR</strong>, then select <strong>Upload from Gallery</strong> to pick the saved image.
               </p>
             </div>
 
@@ -263,7 +257,6 @@ const Checkout = () => {
       </div>
     )
   }
-
   // ==================== MAIN CHECKOUT FORM ====================
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4 sm:px-6 lg:px-8">
