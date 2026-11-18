@@ -81,7 +81,7 @@ const Checkout = () => {
     return `${m}:${s}`
   }
 
-  // ✅ Function to Download QR to Gallery
+  // ✅ Function to Download QR to Gallery (For ABA Mobile)
   const downloadQR = () => {
     const svg = qrRef.current.querySelector('svg')
     const svgData = new XMLSerializer().serializeToString(svg)
@@ -202,7 +202,6 @@ const Checkout = () => {
             <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-1">Scan to Pay</h2>
             <p className="text-gray-500 mb-4 text-sm sm:text-base font-medium">Open ABA Mobile or Bakong App</p>
 
-            {/* 3-Minute Timer */}
             <div className="flex items-center justify-center gap-2 mb-4">
               <span className={`px-4 py-1.5 rounded-full text-sm font-bold flex items-center gap-2 border ${
                 timeLeft < 30 
@@ -222,19 +221,28 @@ const Checkout = () => {
               <QRCode value={qrData} size={200} className="w-full max-w-[200px] h-auto" />
             </div>
 
-            <button
-              onClick={downloadQR}
-              className="flex items-center justify-center gap-2 w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-md mb-4"
-            >
-              <FiDownload size={20} /> Save QR to Phone
-            </button>
+            {/* ✅ Premium Action Buttons */}
+            <div className="space-y-3 mb-6">
+              <a 
+                href={`bakong://pay?qrcode=${encodeURIComponent(qrData)}`}
+                className="flex items-center justify-center gap-2 w-full bg-[#E31B23] text-white py-3 rounded-xl font-bold hover:bg-[#c4161d] transition-all shadow-md"
+              >
+                <FiSmartphone size={20} /> Pay with Bakong App
+              </a>
+              
+              <button
+                onClick={downloadQR}
+                className="flex items-center justify-center gap-2 w-full bg-[#005A9C] text-white py-3 rounded-xl font-bold hover:bg-[#004a80] transition-all shadow-md"
+              >
+                <FiDownload size={20} /> Save QR for ABA Mobile
+              </button>
+            </div>
 
             <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 mb-6 text-left">
               <p className="text-sm text-orange-800 font-medium">
                 <strong>How to pay:</strong><br/>
-                1. Click "Save QR to Phone" above.<br/>
-                2. Open <strong>ABA Mobile</strong> or <strong>Bakong</strong>.<br/>
-                3. Tap <strong>Scan QR</strong>, then select the saved image from your gallery.
+                • <strong>Bakong Users:</strong> Click the red button.<br/>
+                • <strong>ABA Users:</strong> Click the blue button to save the QR, then open ABA Mobile and select it from your photo gallery.
               </p>
             </div>
 
@@ -267,10 +275,8 @@ const Checkout = () => {
 
         <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* Left Column: Form Details */}
           <div className="lg:col-span-2 space-y-6">
             
-            {/* Contact Information */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8">
               <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-3">
                 <span className="bg-orange-100 p-2 rounded-lg text-orange-500"><FiUser size={20} /></span>
@@ -285,7 +291,6 @@ const Checkout = () => {
               </div>
             </div>
 
-            {/* Delivery Address */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8">
               <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-3">
                 <span className="bg-orange-100 p-2 rounded-lg text-orange-500"><FiMapPin size={20} /></span>
@@ -301,7 +306,6 @@ const Checkout = () => {
               </div>
             </div>
 
-            {/* Payment Method */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8">
               <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-3">
                 <span className="bg-orange-100 p-2 rounded-lg text-orange-500"><FiCreditCard size={20} /></span>
@@ -329,7 +333,6 @@ const Checkout = () => {
               </div>
             </div>
 
-            {/* Delivery Instructions */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8">
               <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-3">
                 <span className="bg-orange-100 p-2 rounded-lg text-orange-500"><FiTruck size={20} /></span>
@@ -344,7 +347,6 @@ const Checkout = () => {
             </div>
           </div>
 
-          {/* Right Column: Order Summary (Sticky) */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 sm:p-8 sticky top-24">
               <h2 className="text-xl font-bold text-gray-900 mb-6">Order Summary</h2>
